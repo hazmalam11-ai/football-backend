@@ -12,6 +12,7 @@
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
     "cheerio": "^1.1.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "cron": "^4.3.3",
     "dotenv": "^16.6.1",

@@ -1,7 +1,7 @@
 const express = require("express");
-const Tournament = require("../models/Tournament");
+const Tournament = require("../models/tournament");
 const Team = require("../models/Team");
-const Match = require("../models/Match");
+const Match = require("../models/match");
 const { requireAuth, authorize } = require("../middlewares/auth");
 const { getTournamentInfo, getStandings } = require("../services/footballAPI");
 

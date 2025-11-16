@@ -1,33 +1,70 @@
 const express = require("express");
 const router = express.Router();
 const footballAPI = require("../services/footballAPI");
+const { filterMatches } = require("../middleware/leagueFilter");
 
 // 📦 المودلز
-const Match = require("../models/Match");
-const Tournament = require("../models/Tournament");
+const Match = require("../models/match");
+const Tournament = require("../models/tournament");
 const Team = require("../models/Team");
 const Player = require("../models/Player");
-const News = require("../models/News");
+const News = require("../models/news");
 
 /* ========================
    Matches
 ======================== */
 
-// ✅ مباريات مباشرة
+// ✅ مباريات مباشرة - Real-time from API
 router.get("/matches/live", async (req, res) => {
   try {
-    let matches = await Match.find({ isLive: true }).sort({ updatedAt: -1 });
-
-    if (!matches.length) {
-      const apiData = await footballAPI.getLiveMatches();
-      matches = await Match.insertMany(
-        apiData.map((m) => ({ ...m, apiId: m.apiId })),
-        { ordered: false }
-      ).catch(() => Match.find({ isLive: true })); // fallback
+    console.log("🔴 Fetching live matches from API-Football...");
+    
+    // Always fetch fresh live data from API-Football for real-time updates
+    const apiData = await footballAPI.getLiveMatches();
+    console.log(`📡 API Live Matches Response: ${apiData?.length || 0}`);
+    
+    if (!apiData || apiData.length === 0) {
+      console.log("⚠️ No live matches found from API");
+      return res.json([]);
     }
 
-    res.json(matches);
+    // Transform API data to match our frontend format
+    const liveMatches = apiData.map(match => ({
+      _id: match.fixture.id.toString(),
+      apiId: match.fixture.id,
+      homeTeam: {
+        name: match.teams.home.name,
+        logo: match.teams.home.logo,
+        id: match.teams.home.id
+      },
+      awayTeam: {
+        name: match.teams.away.name,
+        logo: match.teams.away.logo,
+        id: match.teams.away.id
+      },
+      scoreA: match.goals.home ?? 0,
+      scoreB: match.goals.away ?? 0,
+      date: match.fixture.date,
+      status: match.fixture.status.short === "LIVE" ? "live" : match.fixture.status.short.toLowerCase(),
+      minute: match.fixture.status.elapsed || 0,
+      venue: match.fixture.venue?.name || "Unknown Venue",
+      tournament: {
+        name: match.league.name,
+        country: match.league.country,
+        id: match.league.id
+      },
+      isLive: true,
+      updatedAt: new Date()
+    }));
+
+    // Apply league filtering to only show allowed leagues
+    const filteredLiveMatches = filterMatches(liveMatches);
+    console.log(`🔍 League Filter: ${liveMatches.length} → ${filteredLiveMatches.length} live matches after filtering`);
+
+    console.log(`✅ Returning ${filteredLiveMatches.length} live matches`);
+    res.json(filteredLiveMatches);
   } catch (err) {
+    console.error("❌ Error fetching live matches:", err);
     res.status(500).json({ error: "Error fetching live matches", details: err.message });
   }
 });
@@ -35,24 +72,16 @@ router.get("/matches/live", async (req, res) => {
 // ✅ مباريات اليوم
 router.get("/matches/today", async (req, res) => {
   try {
-    let today = new Date().toISOString().split("T")[0];
-    let matches = await Match.find({ date: today }).sort({ updatedAt: -1 });
-
-    if (!matches.length) {
-      const apiData = await footballAPI.getTodayMatches();
-      for (const m of apiData) {
-        await Match.findOneAndUpdate(
-          { apiId: m.apiId },
-          { ...m, date: today },
-          { upsert: true, new: true }
-        );
-      }
-      matches = await Match.find({ date: today });
-    }
-
-    res.json(matches);
+    const { league } = req.query;
+    const matches = await footballAPI.getTodayMatches(league);
+    
+    // Apply league filtering to only show allowed leagues
+    const filteredMatches = filterMatches(matches);
+    console.log(`🔍 League Filter: ${matches.length} → ${filteredMatches.length} today's matches after filtering`);
+    
+    res.json(filteredMatches);
   } catch (err) {
-    res.status(500).json({ error: "Error fetching today matches", details: err.message });
+    res.status(500).json({ message: "Error fetching today's matches", error: err.message });
   }
 });
 
@@ -106,17 +135,22 @@ router.get("/tournaments", async (req, res) => {
 // ✅ ترتيب البطولة
 router.get("/standings/:tournament/:season", async (req, res) => {
   try {
-    const key = `${req.params.tournament}_${req.params.season}`;
-    let tournament = await Tournament.findOne({ standingsKey: key });
-
-    if (!tournament) {
-      const apiData = await footballAPI.getStandings(req.params.tournament, req.params.season);
-      tournament = await Tournament.create({ standingsKey: key, standings: apiData });
-    }
-
-    res.json(tournament.standings);
+    const { tournament, season } = req.params;
+    console.log(`🔍 Fetching standings for tournament: ${tournament}, season: ${season}`);
+    
+    // Directly call API-Football API without database operations
+    const standings = await footballAPI.getStandings(tournament, season);
+    console.log(`✅ Retrieved ${standings.length} teams from API-Football`);
+    
+    res.json(standings);
   } catch (err) {
-    res.status(500).json({ error: "Error fetching standings", details: err.message });
+    console.error("❌ Error fetching standings:", err);
+    res.status(500).json({ 
+      error: "Error fetching standings", 
+      details: err.message,
+      tournament: req.params.tournament,
+      season: req.params.season
+    });
   }
 });
 
@@ -143,18 +177,43 @@ router.get("/teams/:id", async (req, res) => {
 // ✅ لاعبي فريق
 router.get("/teams/:id/players/:season", async (req, res) => {
   try {
-    let players = await Player.find({ teamId: req.params.id, season: req.params.season });
-
-    if (!players.length) {
-      const apiData = await footballAPI.getTeamPlayers(req.params.id, req.params.season);
-      players = await Player.insertMany(apiData, { ordered: false }).catch(() =>
-        Player.find({ teamId: req.params.id, season: req.params.season })
-      );
-    }
-
+    const { id, season } = req.params;
+    console.log(`⚽ Fetching players for team: ${id}, season: ${season}`);
+    
+    // Directly call API-Football API without database operations
+    const players = await footballAPI.getTeamPlayers(id, season);
+    console.log(`✅ Retrieved ${players.length} players for team ${id}`);
+    
     res.json(players);
   } catch (err) {
-    res.status(500).json({ error: "Error fetching team players", details: err.message });
+    console.error("❌ Error fetching team players:", err);
+    res.status(500).json({ 
+      error: "Error fetching team players", 
+      details: err.message,
+      teamId: req.params.id,
+      season: req.params.season
+    });
+  }
+});
+
+// ✅ فرق الدوري
+router.get("/teams/:leagueId/:season", async (req, res) => {
+  try {
+    const { leagueId, season } = req.params;
+    console.log(`⚽ Fetching teams for league: ${leagueId}, season: ${season}`);
+    
+    const teams = await footballAPI.getTeamsByLeague(leagueId, season);
+    console.log(`✅ Retrieved ${teams.length} teams for league ${leagueId}`);
+    
+    res.json(teams);
+  } catch (err) {
+    console.error("❌ Error fetching teams by league:", err);
+    res.status(500).json({ 
+      error: "Error fetching teams by league", 
+      details: err.message,
+      leagueId: req.params.leagueId,
+      season: req.params.season
+    });
   }
 });
 
@@ -193,6 +252,66 @@ router.get("/stats", (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Error fetching API stats", details: err.message });
+  }
+});
+
+// GET /api/football/statistics/:matchId (Match statistics)
+router.get("/statistics/:matchId", async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    console.log(`📊 Fetching statistics for match: ${matchId}`);
+    
+    const statistics = await footballAPI.getMatchStatistics(matchId);
+    console.log(`✅ Retrieved statistics for match ${matchId}`);
+    
+    res.json(statistics);
+  } catch (err) {
+    console.error("❌ Error fetching match statistics:", err);
+    res.status(500).json({ 
+      error: "Error fetching match statistics", 
+      details: err.message,
+      matchId: req.params.matchId
+    });
+  }
+});
+
+// GET /api/football/events/:matchId (Match events)
+router.get("/events/:matchId", async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    console.log(`⚽ Fetching events for match: ${matchId}`);
+    
+    const events = await footballAPI.getMatchEvents(matchId);
+    console.log(`✅ Retrieved ${events.length} events for match ${matchId}`);
+    
+    res.json(events);
+  } catch (err) {
+    console.error("❌ Error fetching match events:", err);
+    res.status(500).json({ 
+      error: "Error fetching match events", 
+      details: err.message,
+      matchId: req.params.matchId
+    });
+  }
+});
+
+// GET /api/football/lineups/:matchId (Match lineups)
+router.get("/lineups/:matchId", async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    console.log(`🧩 Fetching lineups for match: ${matchId}`);
+
+    const lineups = await footballAPI.getMatchLineups(matchId);
+    console.log(`✅ Retrieved ${lineups.length} lineup entries for match ${matchId}`);
+
+    res.json(lineups);
+  } catch (err) {
+    console.error("❌ Error fetching match lineups:", err);
+    res.status(500).json({ 
+      error: "Error fetching match lineups", 
+      details: err.message,
+      matchId: req.params.matchId
+    });
   }
 });
 

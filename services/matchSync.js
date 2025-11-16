@@ -1,8 +1,8 @@
 // services/matchSync.js
 const footballAPI = require("./footballAPI");
-const Match = require("../models/Match");
+const Match = require("../models/match");
 const Team = require("../models/Team");
-const Tournament = require("../models/Tournament");
+const Tournament = require("../models/tournament");
 const { syncPlayers } = require("./playerSync"); // ✅ استدعاء مزامنة اللاعبين
 
 /**

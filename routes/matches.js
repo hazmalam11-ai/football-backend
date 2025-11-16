@@ -1,208 +1,199 @@
 // routes/matches.js
 const express = require("express");
 const router = express.Router();
-const Match = require("../models/Match");
-const Like = require("../models/Like");
-const { requireAuth, authorize } = require("../middlewares/auth");
+const { filterMatches } = require("../middleware/leagueFilter");
 
-// 🆕 استدعاء API المدفوع
+// API functions used by frontend
 const {
-  getTodayMatches,
-  getMatchByIdAPI,
-  getTeamLastMatches,
-  getStandings,
-  getLeagues,
-  getTeamInfo,
-  getTeamPlayers
+  getLiveMatches,
+  getMatchesByDate
 } = require("../services/footballAPI");
-
-// helper: يحاول يقرأ userId لو فيه توكن
-function tryGetUserId(req) {
-  return req.user?.id || null;
-}
-
-/* =========================
-   PUBLIC: API FOOTBALL ENDPOINTS
-   ========================= */
-
-// 🆕 مباريات اليوم (من API خارجي)
-router.get("/today/api", async (req, res) => {
-  try {
-    const { league } = req.query;
-    const matches = await getTodayMatches(league);
-    res.json({ source: "API-Football", count: matches.length, matches });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching API matches", error: err.message });
-  }
-});
-
-// 🆕 مباراة من API بالـ ID
-router.get("/api/:id", async (req, res) => {
-  try {
-    const match = await getMatchByIdAPI(req.params.id);
-    if (!match) return res.status(404).json({ message: "Match not found in API" });
-    res.json(match);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching API match", error: err.message });
-  }
-});
-
-// 🆕 جدول الترتيب
-router.get("/standings/:leagueId", async (req, res) => {
-  try {
-    const season = req.query.season || new Date().getFullYear();
-    const standings = await getStandings(req.params.leagueId, season);
-    res.json({ league: req.params.leagueId, season, standings });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching standings", error: err.message });
-  }
-});
-
-// 🆕 آخر مباريات فريق
-router.get("/team/:teamId/last", async (req, res) => {
-  try {
-    const count = req.query.count || 5;
-    const matches = await getTeamLastMatches(req.params.teamId, count);
-    res.json({ teamId: req.params.teamId, matches });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching team matches", error: err.message });
-  }
-});
-
-// 🆕 لاعبي الفريق
-router.get("/team/:teamId/players", async (req, res) => {
-  try {
-    const season = req.query.season || new Date().getFullYear();
-    const players = await getTeamPlayers(req.params.teamId, season);
-    res.json({ teamId: req.params.teamId, season, players });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching players", error: err.message });
-  }
-});
-
-// 🆕 الدوريات
-router.get("/leagues", async (req, res) => {
-  try {
-    const { country, season } = req.query;
-    const leagues = await getLeagues(country, season);
-    res.json({ count: leagues.length, leagues });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching leagues", error: err.message });
-  }
-});
 
 /* =========================
    PUBLIC: DATABASE ENDPOINTS
    ========================= */
 
-// GET /matches (كل المباريات من الداتابيز)
+// GET /matches (Matches from API-Football with optional date filtering)
 router.get("/", async (req, res) => {
   try {
-    const matches = await Match.find()
-      .populate("homeTeam", "name country logo")
-      .populate("awayTeam", "name country logo")
-      .populate("tournament", "name year country")
-      .sort({ date: -1 });
+    const { date, timezone, league, live } = req.query;
+    
+    // If date is provided, fetch from API-Football
+    if (date) {
+      // Use timezone from frontend or default to UTC
+      const userTimezone = timezone || 'UTC';
+      console.log(`📅 Fetching matches for date: ${date} (timezone: ${userTimezone})`);
+      
+      // Fetch matches from API-Football for the specified date
+      const apiData = await getMatchesByDate(date, userTimezone);
+      console.log(`📡 API Matches Response: ${apiData?.length || 0}`);
+      
+      if (!apiData || apiData.length === 0) {
+        console.log("⚠️ No matches found for the specified date");
+        return res.json([]);
+      }
 
-    const userId = tryGetUserId(req);
+      //  priority sorting
+      // Get dynamic priority order from leagues configuration
+      const { getAllowedLeagues } = require('../config/leagues');
+      const allowedLeagues = getAllowedLeagues();
+      const priorityOrder = allowedLeagues
+        .sort((a, b) => a.priority - b.priority)
+        .map(league => league.id);
+      
+      let formattedMatches = apiData.map(match => ({
+        _id: match.fixture.id.toString(),
+        apiId: match.fixture.id,
+        homeTeam: {
+          name: match.teams.home.name,
+          logo: match.teams.home.logo,
+          id: match.teams.home.id
+        },
+        awayTeam: {
+          name: match.teams.away.name,
+          logo: match.teams.away.logo,
+          id: match.teams.away.id
+        },
+        scoreA: match.goals.home ?? 0,
+        scoreB: match.goals.away ?? 0,
+        date: match.fixture.date,
+        status: match.fixture.status.short,
+        minute: match.fixture.status.elapsed || 0,
+        venue: match.fixture.venue?.name || "Unknown Venue",
+        tournament: {
+          name: match.league.name,
+          country: match.league.country,
+          id: match.league.id,
+          logo: match.league.logo
+        },
+        timezone: userTimezone,
+        updatedAt: new Date(),
+        // Add priority for sorting
+        priority: priorityOrder.indexOf(match.league.id)
+      }));
 
-    const matchesWithLikes = await Promise.all(
-      matches.map(async (match) => {
-        const likesCount = await Like.countDocuments({ targetType: "Match", targetId: match._id });
-        let userLiked = false;
-        if (userId) {
-          userLiked = !!(await Like.exists({ user: userId, targetType: "Match", targetId: match._id }));
-        }
-        return { ...match.toObject(), likes: likesCount, likedByUser: userLiked };
-      })
-    );
+      // Apply league filtering (same as HTML template)
+      if (league && league !== 'all') {
+        const leagueId = parseInt(league);
+        formattedMatches = formattedMatches.filter(match => match.tournament.id === leagueId);
+        console.log(`🔍 Filtered by league ${leagueId}: ${formattedMatches.length} matches`);
+      }
 
-    res.json(matchesWithLikes);
+      if (live === 'true') {
+        const liveStatuses = ['1H', 'HT', '2H', 'ET', 'P'];
+        formattedMatches = formattedMatches.filter(match => liveStatuses.includes(match.status));
+        console.log(`🔴 Filtered live matches: ${formattedMatches.length} matches`);
+      }
+
+      // Apply league filtering to only show allowed leagues
+      formattedMatches = filterMatches(formattedMatches);
+      console.log(`🔍 League Filter: ${formattedMatches.length} matches after filtering`);
+
+      // Sort matches by priority (same as HTML template)
+      formattedMatches.sort((a, b) => {
+        const aPrio = a.priority;
+        const bPrio = b.priority;
+        
+        if (aPrio !== -1 && bPrio !== -1) return aPrio - bPrio; // Both are important
+        if (aPrio !== -1) return -1; // a is important, b is not
+        if (bPrio !== -1) return 1; // b is important, a is not
+        
+        return a.tournament.name.localeCompare(b.tournament.name); // Neither is important, sort alphabetically
+      });
+
+      console.log(`✅ Returning ${formattedMatches.length} matches for ${date}`);
+      return res.json(formattedMatches);
+    }
+    
+    // If no date provided, return empty array
+    res.json([]);
   } catch (err) {
+    console.error("❌ Error fetching matches:", err);
     res.status(500).json({ message: "Error fetching matches", error: err.message });
   }
 });
 
-// GET /matches/live (مباريات لايف من الداتابيز)
+
+// GET /matches/live (Real-time from API-Football)
 router.get("/live", async (req, res) => {
   try {
-    const liveMatches = await Match.find({ status: { $in: ["live", "half-time"] } })
-      .populate("homeTeam", "name country logo")
-      .populate("awayTeam", "name country logo")
-      .populate("tournament", "name year country")
-      .sort({ minute: -1 });
-
-    res.json(liveMatches);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching live matches", error: err.message });
-  }
-});
-
-// GET /matches/:id (مباراة من الداتابيز)
-router.get("/:id", async (req, res) => {
-  try {
-    const match = await Match.findById(req.params.id)
-      .populate("homeTeam", "name country logo")
-      .populate("awayTeam", "name country logo")
-      .populate("tournament", "name year country");
-
-    if (!match) return res.status(404).json({ message: "Match not found" });
-
-    res.json(match);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching match", error: err.message });
-  }
-});
-
-/* =========================
-   PROTECTED: ADMIN OPS
-   ========================= */
-
-// ➕ إضافة مباراة
-router.post("/", requireAuth, authorize("match:create"), async (req, res) => {
-  try {
-    const match = new Match(req.body);
-    await match.save();
-    res.status(201).json({ message: "Match created", match });
-  } catch (err) {
-    res.status(400).json({ message: "Error creating match", error: err.message });
-  }
-});
-
-// ✏️ تحديث النتيجة
-router.put("/:id/score", requireAuth, authorize("match:edit"), async (req, res) => {
-  try {
-    const { scoreA, scoreB, minute } = req.body;
-    const match = await Match.findByIdAndUpdate(
-      req.params.id,
-      { scoreA, scoreB, minute, status: "live" },
-      { new: true }
-    );
-    if (!match) return res.status(404).json({ message: "Match not found" });
-
-    if (global.sendLiveScoreUpdate) {
-      global.sendLiveScoreUpdate(match._id, {
-        homeScore: match.scoreA,
-        awayScore: match.scoreB,
-        minute: match.minute,
-      });
+    console.log("🔴 Fetching live matches from API-Football...");
+    
+    // Always fetch fresh live data from API-Football for real-time updates
+    const apiData = await getLiveMatches();
+    console.log(`📡 API Live Matches Response: ${apiData?.length || 0}`);
+    
+    if (!apiData || apiData.length === 0) {
+      console.log("⚠️ No live matches found from API");
+      return res.json([]);
     }
 
-    res.json({ message: "Score updated", match });
+    // Transform API data to match our frontend format with live indicators
+    const liveMatches = apiData.map(match => {
+      const status = match.fixture.status.short;
+      const elapsed = match.fixture.status.elapsed;
+      
+      // Determine live status and display text
+      let liveStatus = "LIVE";
+      let liveDisplay = "";
+      let isLive = false;
+      
+      if (status === "LIVE" || status === "1H" || status === "2H" || status === "HT") {
+        isLive = true;
+        if (status === "HT") {
+          liveDisplay = "HT";
+        } else if (status === "1H") {
+          liveDisplay = elapsed ? `${elapsed}'` : "1H";
+        } else if (status === "2H") {
+          liveDisplay = elapsed ? `${elapsed}'` : "2H";
+        } else {
+          liveDisplay = elapsed ? `${elapsed}'` : "LIVE";
+        }
+      }
+      
+      return {
+        _id: match.fixture.id.toString(),
+        apiId: match.fixture.id,
+        homeTeam: {
+          name: match.teams.home.name,
+          logo: match.teams.home.logo,
+          id: match.teams.home.id
+        },
+        awayTeam: {
+          name: match.teams.away.name,
+          logo: match.teams.away.logo,
+          id: match.teams.away.id
+        },
+        scoreA: match.goals.home ?? 0,
+        scoreB: match.goals.away ?? 0,
+        date: match.fixture.date,
+        status: status.toLowerCase(),
+        minute: elapsed || 0,
+        liveStatus: liveStatus,
+        liveDisplay: liveDisplay,
+        isLive: isLive,
+        venue: match.fixture.venue?.name || "Unknown Venue",
+        tournament: {
+          name: match.league.name,
+          country: match.league.country,
+          id: match.league.id
+        },
+        updatedAt: new Date()
+      };
+    });
+
+    // Apply league filtering to only show allowed leagues
+    const filteredLiveMatches = filterMatches(liveMatches);
+    console.log(`🔍 League Filter: ${liveMatches.length} → ${filteredLiveMatches.length} live matches after filtering`);
+
+    console.log(`✅ Returning ${filteredLiveMatches.length} live matches directly from API`);
+    res.json(filteredLiveMatches);
   } catch (err) {
-    res.status(500).json({ message: "Error updating score", error: err.message });
+    console.error("❌ Error fetching live matches:", err);
+    res.status(500).json({ error: "Error fetching live matches", details: err.message });
   }
 });
 
-// 🗑️ حذف مباراة
-router.delete("/:id", requireAuth, authorize("match:delete"), async (req, res) => {
-  try {
-    const deleted = await Match.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Match not found" });
-    res.json({ message: "Match deleted" });
-  } catch (err) {
-    res.status(500).json({ message: "Error deleting match", error: err.message });
-  }
-});
+
 
 module.exports = router;

@@ -27,6 +27,21 @@ const FantasyTeamSchema = new mongoose.Schema(
         isCaptain: { type: Boolean, default: false },
         isViceCaptain: { type: Boolean, default: false },
         isSubstitute: { type: Boolean, default: false },
+        // Match statistics for scoring
+        minutesPlayed: { type: Number, default: 0 },
+        goals: { type: Number, default: 0 },
+        assists: { type: Number, default: 0 },
+        cleanSheet: { type: Boolean, default: false },
+        goalsConceded: { type: Number, default: 0 },
+        yellowCards: { type: Number, default: 0 },
+        redCards: { type: Number, default: 0 },
+        penaltiesSaved: { type: Number, default: 0 },
+        penaltiesMissed: { type: Number, default: 0 },
+        // Match reference
+        match: { 
+          type: mongoose.Schema.Types.ObjectId, 
+          ref: "ExternalMatch" 
+        },
       },
     ],
 
@@ -69,6 +84,26 @@ const FantasyTeamSchema = new mongoose.Schema(
     rank: { 
       type: Number, 
       default: null 
+    },
+
+    // نوع الفريق الأساسي
+    teamType: {
+      type: String,
+      enum: ['barcelona', 'real-madrid', 'custom'],
+      default: 'custom'
+    },
+
+    // التشكيلة التكتيكية
+    formation: {
+      type: String,
+      default: '4-4-2'
+    },
+
+    // إعدادات تكتيكية مفصلة
+    tacticalSetup: {
+      starters: [{ type: mongoose.Schema.Types.ObjectId, ref: "Player" }],
+      substitutes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Player" }],
+      lastUpdated: { type: Date, default: Date.now }
     },
   },
   { timestamps: true }

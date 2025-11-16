@@ -8,6 +8,7 @@ const GameweekSchema = new mongoose.Schema(
 
     // المباريات المرتبطة بالجولة
     matches: [{ type: mongoose.Schema.Types.ObjectId, ref: "Match" }],
+    externalMatches: [{ type: mongoose.Schema.Types.ObjectId, ref: "ExternalMatch" }], // External matches from API
 
     // حالة الجولة
     isActive: { type: Boolean, default: false },   // الجولة الحالية

@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require('../user');
 const { PERMISSIONS, ROLES } = require('./roles');
 
 // التحقق من JWT

@@ -2,7 +2,8 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const News = require("../models/News");
+const News = require("../models/news");
+const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 const router = express.Router();
@@ -23,6 +24,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Normalize boolean-like payloads coming as strings from forms
+function parseBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (v === "true" || v === "1" || v === "yes" || v === "on") return true;
+    if (v === "false" || v === "0" || v === "no" || v === "off" || v === "") return false;
+  }
+  return false;
+}
+
 // ➕ إنشاء خبر (يدعم رفع صورة)
 router.post(
   "/",
@@ -31,7 +44,7 @@ router.post(
   upload.single("image"), // هنا بنرفع صورة باسم field "image"
   async (req, res, next) => {
     try {
-      const { title, content, category } = req.body;
+      const { title, content, category, isFeatured } = req.body;
       if (!title || !content) {
         res.status(400);
         throw new Error("title and content are required");
@@ -40,12 +53,20 @@ router.post(
       // لو فيه صورة
       const imageUrl = req.file ? `/uploads/news/${req.file.filename}` : null;
 
+      const willBeFeatured = parseBoolean(isFeatured);
+
+      // If setting this news as featured, remove featured from others first
+      if (willBeFeatured) {
+        await News.updateMany({ isFeatured: true }, { $set: { isFeatured: false } });
+      }
+
       const news = await News.create({
         title,
         content,
         category,
         imageUrl,
         author: req.user?.id,
+        isFeatured: willBeFeatured,
       });
 
       res.status(201).json({ message: "News created", news });
@@ -61,9 +82,27 @@ router.get("/", async (req, res, next) => {
     const { q } = req.query;
     const filter = q ? { title: { $regex: q, $options: "i" } } : {};
     const news = await News.find(filter)
-      .populate("author", "username email role")
+      .populate("author", "username")
       .sort({ createdAt: -1 });
-    res.json(news);
+
+    const userId = req.user?.id || null;
+    
+    // Get comment counts for all news items
+    const newsWithLikesAndComments = await Promise.all(
+      news.map(async (item) => {
+        const likedByUser = userId ? item.likes.includes(userId) : false;
+        const commentsCount = await NewsComment.countDocuments({ news: item._id });
+        
+        return {
+          ...item.toObject(),
+          likesCount: item.likes.length,
+          likedByUser,
+          commentsCount
+        };
+      })
+    );
+
+    res.json(newsWithLikesAndComments);
   } catch (err) {
     next(err);
   }
@@ -72,12 +111,24 @@ router.get("/", async (req, res, next) => {
 // 📌 خبر واحد
 router.get("/:id", async (req, res, next) => {
   try {
-    const item = await News.findById(req.params.id).populate("author", "username email role");
+    const item = await News.findById(req.params.id).populate("author", "username");
     if (!item) {
       res.status(404);
       throw new Error("News not found");
     }
-    res.json(item);
+
+    const userId = req.user?.id || null;
+    const likedByUser = userId ? item.likes.includes(userId) : false;
+    const commentsCount = await NewsComment.countDocuments({ news: item._id });
+    
+    const response = {
+      ...item.toObject(),
+      likesCount: item.likes.length,
+      likedByUser,
+      commentsCount
+    };
+
+    res.json(response);
   } catch (err) {
     next(err);
   }
@@ -91,8 +142,15 @@ router.put(
   upload.single("image"),
   async (req, res, next) => {
     try {
-      const { title, content, category } = req.body;
+      const { title, content, category, isFeatured } = req.body;
       const updateData = { title, content, category };
+      if (typeof isFeatured !== "undefined") {
+        const willBeFeatured = parseBoolean(isFeatured);
+        if (willBeFeatured) {
+          await News.updateMany({ _id: { $ne: req.params.id }, isFeatured: true }, { $set: { isFeatured: false } });
+        }
+        updateData.isFeatured = willBeFeatured;
+      }
 
       if (req.file) {
         updateData.imageUrl = `/uploads/news/${req.file.filename}`;
@@ -123,6 +181,33 @@ router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) =>
       throw new Error("News not found");
     }
     res.json({ message: "News deleted" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 💖 Toggle like on a news article
+router.post("/:id/like", requireAuth, async (req, res, next) => {
+  try {
+    const news = await News.findById(req.params.id);
+    if (!news) {
+      return res.status(404).json({ message: "News article not found" });
+    }
+
+    const userId = req.user.id;
+    const likedIndex = news.likes.indexOf(userId);
+    let likedByUser = false;
+
+    if (likedIndex === -1) {
+      news.likes.push(userId);
+      likedByUser = true;
+    } else {
+      news.likes.splice(likedIndex, 1);
+      likedByUser = false;
+    }
+
+    await news.save();
+    res.json({ likesCount: news.likes.length, likedByUser });
   } catch (err) {
     next(err);
   }

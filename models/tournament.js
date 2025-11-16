@@ -36,6 +36,15 @@ const TournamentSchema = new mongoose.Schema(
         ref: "Team", // ربط البطولة بالفرق
       },
     ],
+    standingsKey: {
+      type: String, // مفتاح فريد للترتيب (leagueId_season)
+      unique: true,
+      sparse: true,
+    },
+    standings: {
+      type: [mongoose.Schema.Types.Mixed], // ترتيب الفرق
+      default: [],
+    },
   },
   { timestamps: true }
 );
@@ -43,6 +52,7 @@ const TournamentSchema = new mongoose.Schema(
 // ✅ Indexes للبحث السريع
 TournamentSchema.index({ name: 1, season: -1 });
 TournamentSchema.index({ country: 1 });
+TournamentSchema.index({ standingsKey: 1 });
 
 // ✅ Virtual: عدد الفرق
 TournamentSchema.virtual("teamCount").get(function () {

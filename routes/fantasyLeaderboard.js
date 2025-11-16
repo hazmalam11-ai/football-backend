@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const teams = await FantasyTeam.find()
-      .populate("user", "username email")
+      .populate("user", "username email fullName")
       .sort({ totalPoints: -1 }) // ترتيب تنازلي بالنقاط
       .limit(50); // أعلى 50 فريق
 

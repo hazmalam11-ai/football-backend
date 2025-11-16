@@ -63,4 +63,30 @@ const allowOwnerOr = (getOwnerId) => {
   };
 };
 
-module.exports = { requireAuth, authorize, allowOwnerOr };
+// 🔵 السماح للـ owner أو أدوار محددة (مثل admin/moderator/editor)
+const allowOwnerOrRoles = (getOwnerId, roles = []) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // ✅ إذا عنده أحد الأدوار المسموحة يدخل
+      if (roles.includes(req.user.role)) {
+        return next();
+      }
+
+      // ✅ وإلا لازم يكون صاحب الريسورس
+      const ownerId = await getOwnerId(req);
+      if (!ownerId || req.user.id.toString() !== ownerId.toString()) {
+        return res.status(403).json({ message: "Forbidden: Not owner" });
+      }
+
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+};
+
+module.exports = { requireAuth, authorize, allowOwnerOr, allowOwnerOrRoles };

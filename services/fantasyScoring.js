@@ -1,5 +1,5 @@
 // services/fantasyScoring.js
-const Match = require("../models/Match");
+const Match = require("../models/match");
 const Player = require("../models/Player");
 const FantasyTeam = require("../models/FantasyTeam");
 const FantasyPoints = require("../models/FantasyPoints");

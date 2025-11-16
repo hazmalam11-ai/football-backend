@@ -1,6 +1,6 @@
 // services/tournamentSync.js
 const footballAPI = require("./footballAPI");
-const Tournament = require("../models/Tournament");
+const Tournament = require("../models/tournament");
 
 const syncTournaments = async (country, season) => {
   try {

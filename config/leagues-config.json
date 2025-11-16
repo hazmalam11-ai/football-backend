@@ -1,0 +1,79 @@
+{
+  "allowedLeagues": {
+    "league_135": {
+      "id": 135,
+      "name": "Serie A",
+      "country": "Italy",
+      "priority": 1
+    },
+    "league_140": {
+      "id": 140,
+      "name": "La Liga",
+      "country": "Spain",
+      "priority": 2
+    },
+    "league_233": {
+      "id": 233,
+      "name": "Premier League",
+      "country": "Egypt",
+      "priority": 3
+    },
+    "league_39": {
+      "id": 39,
+      "name": "Premier League",
+      "country": "England",
+      "priority": 4
+    },
+    "league_78": {
+      "id": 78,
+      "name": "Bundesliga",
+      "country": "Germany",
+      "priority": 5
+    },
+    "league_2": {
+      "id": 2,
+      "name": "Champions League",
+      "country": "Europe",
+      "priority": 6
+    },
+    "league_1036": {
+      "id": 1036,
+      "name": "Copa Santa Catarina",
+      "country": "Brazil",
+      "priority": 7
+    },
+    "league_242": {
+      "id": 242,
+      "name": "Liga Pro",
+      "country": "Ecuador",
+      "priority": 8
+    },
+    "league_243": {
+      "id": 243,
+      "name": "Liga Pro Serie B",
+      "country": "Ecuador",
+      "priority": 9
+    },
+    "league_490": {
+      "id": 490,
+      "name": "World Cup - U20",
+      "country": "World",
+      "priority": 10
+    }
+  },
+  "lastUpdated": "2025-10-08T23:42:32.577Z",
+  "version": "1.0",
+  "allowedIds": [
+    135,
+    140,
+    233,
+    39,
+    78,
+    2,
+    1036,
+    242,
+    243,
+    490
+  ],
+  "count": 10
+}

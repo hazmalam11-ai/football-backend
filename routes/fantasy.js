@@ -4,7 +4,7 @@ const router = express.Router();
 const FantasyTeam = require("../models/FantasyTeam");
 const FantasyLeague = require("../models/FantasyLeague");
 const Player = require("../models/Player");
-const Match = require("../models/Match");
+const Match = require("../models/match");
 
 // ===============================
 // ✅ إنشاء فريق فانتازي جديد

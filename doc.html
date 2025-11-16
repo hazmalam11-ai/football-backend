@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sports Backend API Docs</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; margin: 24px; line-height: 1.55; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 28px 0 8px; font-size: 20px; }
+    h3 { margin: 20px 0 6px; font-size: 16px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-right: 8px; }
+    .get { background: #e6f4ff; color: #184a7c; }
+    .post { background: #e8f5e9; color: #1b5e20; }
+    .put { background: #fff3e0; color: #e65100; }
+    .del { background: #ffebee; color: #b71c1c; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .endpoint { border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 14px; }
+    .small { color: #666; font-size: 13px; }
+    .kbd { padding: 2px 6px; border-radius: 6px; border: 1px solid #ccc; font-size: 12px; }
+    .muted { color: #777; }
+    .section { margin-top: 18px; }
+    .path { font-weight: 600; }
+    ul { margin: 6px 0 6px 18px; }
+  </style>
+  <meta name="robots" content="noindex" />
+</head>
+<body>
+  <header>
+    <h1>Sports Backend API</h1>
+    <div class="small">Base URL: <code>http://localhost:5050</code></div>
+    <div class="small">Auth: Bearer JWT in header <code>Authorization: Bearer &lt;token&gt;</code></div>
+  </header>
+
+  <section class="section">
+    <h2>Environment</h2>
+    <ul>
+      <li><b>Required</b>: <code>MONGO_URI</code>, <code>FOOTBALL_API_KEY</code>, <code>JWT_SECRET</code></li>
+      <li><b>Optional</b>: <code>ALLOWED_ORIGINS</code> (comma separated), <code>PORT</code> (default 5050)</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Auth</h2>
+    <div class="grid">
+      <div class="endpoint">
+        <span class="tag post">POST</span>
+        <span class="path">/auth/register</span>
+        <div class="small">Body: { username, email, password, role? }</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag post">POST</span>
+        <span class="path">/auth/login</span>
+        <div class="small">Body: { email, password } → token</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag get">GET</span>
+        <span class="path">/auth/me</span>
+        <div class="small">Header: Bearer token</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Matches</h2>
+    <div class="grid">
+      <div class="endpoint">
+        <span class="tag get">GET</span>
+        <span class="path">/matches</span>
+        <div class="small">Public. Lists matches with teams/tournament and like counts.</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag get">GET</span>
+        <span class="path">/matches/live</span>
+        <div class="small">Public. Live and half-time matches.</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag get">GET</span>
+        <span class="path">/matches/:id</span>
+        <div class="small">Public. Match by DB id.</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag post">POST</span>
+        <span class="path">/matches</span>
+        <div class="small">Requires role <code>match:create</code>. Body: match fields per schema.</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag put">PUT</span>
+        <span class="path">/matches/:id/score</span>
+        <div class="small">Requires role <code>match:edit</code>. Body: { scoreA, scoreB, minute }.</div>
+      </div>
+      <div class="endpoint">
+        <span class="tag del">DELETE</span>
+        <span class="path">/matches/:id</span>
+        <div class="small">Requires role <code>match:delete</code>.</div>
+      </div>
+    </div>
+
+    <h3 class="muted">External Football API helpers</h3>
+    <div class="grid">
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/today/api</span> <span class="small">Query: league?</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/api/:id</span> <span class="small">External match id</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/standings/:leagueId</span> <span class="small">Query: season?</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/team/:teamId/last</span> <span class="small">Query: count? (default 5)</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/team/:teamId/players</span> <span class="small">Query: season?</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/matches/leagues</span> <span class="small">Query: country?, season?</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>News</h2>
+    <div class="grid">
+      <div class="endpoint"><span class="tag post">POST</span><span class="path">/news</span> <span class="small">Auth (admin/editor). Multipart with <code>image</code>.</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/news</span> <span class="small">Query: <code>q</code> (search)</span></div>
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/news/:id</span></div>
+      <div class="endpoint"><span class="tag put">PUT</span><span class="path">/news/:id</span> <span class="small">Auth (admin/editor). Supports image update.</span></div>
+      <div class="endpoint"><span class="tag del">DELETE</span><span class="path">/news/:id</span> <span class="small">Auth (admin)</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Social</h2>
+    <div class="grid">
+      <div class="endpoint"><span class="tag get">GET</span><span class="path">/comments</span> / <span class="tag post">POST</span> <span class="small">Depending on implementation</span></div>
+      <div class="endpoint"><span class="tag post">POST</span><span class="path">/likes</span> <span class="small">Like target (e.g., Match, Comment)</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Fantasy</h2>
+    <div class="grid">
+      <div class="endpoint"><span class="tag get">GET</span>/<span class="tag post">POST</span> <span class="path">/fantasy/teams</span></div>
+      <div class="endpoint"><span class="tag get">GET</span> <span class="path">/fantasy/gameweeks</span></div>
+      <div class="endpoint"><span class="tag get">GET</span> <span class="path">/fantasy/leaderboard</span></div>
+      <div class="endpoint"><span class="tag get">GET</span> <span class="path">/fantasy/scoring</span></div>
+      <div class="endpoint"><span class="tag get">GET</span>/<span class="tag post">POST</span> <span class="path">/fantasy/mini-leagues</span></div>
+    </div>
+    <p class="small muted">Background scoring runs every 5 minutes. See <code>services/fantasyScoring.js</code>.</p>
+  </section>
+
+  <section class="section">
+    <h2>Live Updates (Socket.io)</h2>
+    <ul>
+      <li>Join room: client emits <code>join-match</code> with <code>matchId</code>.</li>
+      <li>Events: <code>score-update</code>, <code>match-event</code>, <code>match-status</code>.</li>
+      <li>Rooms are named: <code>match-&lt;id&gt;</code>.</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Static Files</h2>
+    <p>Uploads served from <code>/uploads</code> (e.g., news images).</p>
+  </section>
+
+  <footer class="section small muted">
+    <div>Tip: Linux is case-sensitive. Model files use lowercase names like <code>user.js</code>, <code>match.js</code>, <code>tournament.js</code>, <code>news.js</code>.</div>
+  </footer>
+</body>
+</html>
+

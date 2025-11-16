@@ -3,13 +3,34 @@
 const express = require("express");
 const Player = require("../models/Player");
 const { requireAuth, authorize } = require("../middlewares/auth");
-const { getPlayerInfo, getPlayerStats } = require("../services/footballAPI");
+const { getPlayerInfo, getPlayerStats, getTopScorers } = require("../services/footballAPI");
 
 const router = express.Router();
 
 /* ========================
     API-Football Endpoints
    ======================== */
+
+// 📌 جلب هدافي اللاعبين من API
+router.get("/api/topscorers", async (req, res, next) => {
+  try {
+    const { league, season } = req.query;
+    const currentSeason = season || new Date().getFullYear();
+    
+    if (!league) {
+      return res.status(400).json({ message: "League ID is required" });
+    }
+    
+    console.log(`🏆 Fetching top scorers for league ${league}, season ${currentSeason}`);
+    const topScorers = await getTopScorers(league, currentSeason);
+    
+    // Set proper UTF-8 encoding
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json(topScorers);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // 📌 جلب بيانات لاعب من API
 router.get("/api/:id", async (req, res, next) => {

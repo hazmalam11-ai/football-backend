@@ -1,7 +1,7 @@
 // seedAdmin.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs"); // ✅ لازم نضيف دي
-const User = require("./models/User"); // خلي بالك اسم الملف لازم يكون مظبوط
+const User = require("./models/user"); // خلي بالك اسم الملف لازم يكون مظبوط
 const dotenv = require("dotenv");
 
 dotenv.config();

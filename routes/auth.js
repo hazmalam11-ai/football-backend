@@ -1,15 +1,44 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const { requireAuth } = require("../middlewares/auth");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const User = require("../models/user");
+const { requireAuth, authorize } = require("../middlewares/auth");
 
 const router = express.Router();
+
+// Multer configuration for avatar uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, "../uploads/avatars");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
+
+const upload = multer({ 
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // 🟢 Register
 router.post("/register", async (req, res, next) => {
   try {
-    const { username, email, password, role = "user" } = req.body;
+    const { username, email, password, country = "", fullName = "", role = "user" } = req.body;
 
     // 1) تحقق من الحقول
     if (!username || !email || !password) {
@@ -46,6 +75,8 @@ router.post("/register", async (req, res, next) => {
       email,
       password: hashed,
       role,
+      country,
+      fullName,
     });
 
     // 6) رجّع المستخدم بدون الباسورد
@@ -106,8 +137,72 @@ router.post("/login", async (req, res, next) => {
 });
 
 // 🔵 Get user info from token
-router.get("/me", requireAuth, (req, res) => {
-  res.json({ success: true, user: req.user });
+router.get("/me", requireAuth, async (req, res, next) => {
+  try {
+    const dbUser = await User.findById(req.user.id).select("-password");
+    if (!dbUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    res.json({ success: true, user: dbUser });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Upload avatar endpoint
+router.post("/avatar", requireAuth, upload.single("avatar"), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file provided" });
+    }
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { avatar: avatarUrl },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Avatar updated successfully", 
+      user: updatedUser 
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;
+
+// ===============================
+// Admin: update user role
+// PATCH /auth/users/:id/role  { role: 'admin'|'moderator'|'editor'|'user' }
+router.patch("/users/:id/role", requireAuth, authorize("admin"), async (req, res, next) => {
+  try {
+    const { role } = req.body || {};
+    const allowed = ["admin", "moderator", "editor", "user"];
+    if (!allowed.includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid role" });
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, message: "Role updated", user: updated });
+  } catch (err) {
+    next(err);
+  }
+});

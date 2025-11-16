@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/User");
-const Match = require("../models/Match");
+const User = require("../models/user");
+const Match = require("../models/match");
 const Comment = require("../models/Comment");
 const Like = require("../models/Like");
+const News = require("../models/news");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // 📊 Dashboard Stats (Admin Only)
@@ -13,6 +14,7 @@ router.get("/", requireAuth, authorize("admin"), async (req, res, next) => {
     const matchesCount = await Match.countDocuments();
     const commentsCount = await Comment.countDocuments();
     const likesCount = await Like.countDocuments();
+    const newsCount = await News.countDocuments();
 
     // 🟢 أكتر تعليق واخد لايكات
     const mostLikedComment = await Like.aggregate([
@@ -57,11 +59,35 @@ router.get("/", requireAuth, authorize("admin"), async (req, res, next) => {
       }
     }
 
+    // Monthly stats (last 12 months)
+    async function monthlyCounts(Model) {
+      const now = new Date();
+      const result = [];
+      for (let i = 11; i >= 0; i--) {
+        const from = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const to = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        // eslint-disable-next-line no-await-in-loop
+        const c = await Model.countDocuments({ createdAt: { $gte: from, $lt: to } });
+        result.push({ month: from.toISOString().slice(0,7), count: c });
+      }
+      return result;
+    }
+
+    const [usersMonthly, newsMonthly, matchesMonthly] = await Promise.all([
+      monthlyCounts(User),
+      monthlyCounts(News),
+      monthlyCounts(Match)
+    ]);
+
     res.json({
       usersCount,
       matchesCount,
       commentsCount,
       likesCount,
+      newsCount,
+      usersMonthly,
+      newsMonthly,
+      matchesMonthly,
       topComment: topComment || "No comments yet",
       topMatch: topMatch || "No matches with comments yet"
     });
