@@ -173,7 +173,7 @@ app.use("/users", usersRoutes);
 // ===============================
 // ✅ Football API Namespace
 app.use("/api/football", footballRoutes);
-app.use("/api/football/matches", matchRoutes);  // ← هنا مكانه الصح 👌
+app.use("/matches", matchRoutes);  // ← هنا مكانه الصح 👌
 app.use("/api/leagues", leaguesRoutes);
 
 // ===============================
