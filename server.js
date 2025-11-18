@@ -167,7 +167,7 @@ app.use("/users", usersRoutes);
 app.use("/api/football", footballRoutes);
 app.use("/api/leagues", leaguesRoutes);
 
-// ✅ Fantasy APIs
+// Fantasy APIs
 app.use("/fantasy/teams", fantasyTeamRoutes);
 app.use("/fantasy/gameweeks", fantasyGameweekRoutes);
 app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
@@ -175,8 +175,11 @@ app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
 
-// ✅ Match Data APIs
+// Match Data APIs
 app.use("/api/match-data", matchDataRoutes);
+
+// ⚠️ لازم تضيف ده:
+app.use("/api/matches", matchDataRoutes);
 
 // ✅ Insights APIs
 app.use("/api/insights", insightsRoutes);
