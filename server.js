@@ -178,9 +178,6 @@ app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
 // Match Data APIs
 app.use("/api/match-data", matchDataRoutes);
 
-// ⚠️ لازم تضيف ده:
-app.use("/api/matches", matchDataRoutes);
-
 // ✅ Insights APIs
 app.use("/api/insights", insightsRoutes);
 
