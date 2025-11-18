@@ -132,42 +132,28 @@ class FootballAPIService {
     }
   }
 
-  // ✅ جلب مباريات بتاريخ محدد - Updated to match HTML template logic
-  async getMatchesByDate(date, timezone = 'UTC') {
-    try {
-      // Format date as YYYY-MM-DD (same as HTML template)
-      const dateStr = new Date(date).toISOString().split("T")[0];
-      
-      console.log(`📅 Fetching matches for date: ${dateStr} (timezone: ${timezone})`);
-      
-      // Use direct API call like HTML template
-      const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}`, {
-        method: 'GET',
-        headers: {
-          'x-rapidapi-host': 'v3.football.api-sports.io',
-          'x-rapidapi-key': this.apiKey
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Check for API errors (same as HTML template)
-      if (data.errors && Object.keys(data.errors).length > 0) {
-        throw new Error(data.errors.token || JSON.stringify(data.errors));
-      }
-      
-      console.log(`📡 API Response: ${data.results} matches found for ${dateStr}`);
-      return data.response || [];
-    } catch (error) {
-      console.error("❌ Error in getMatchesByDate:", error.message);
-      return [];
-    }
-  }
+async getMatchesByDate(date, timezone = 'UTC') {
+  try {
+    const dateStr = new Date(date).toISOString().split("T")[0];
 
+    console.log(`📅 Fetching matches for date: ${dateStr}`);
+
+    const response = await this.api.get("/fixtures", { 
+      params: { 
+        date: dateStr,
+        timezone
+      }
+    });
+
+    console.log(`📡 API Response: ${response.data.results} matches found for ${dateStr}`);
+    return response.data.response || [];
+    
+  } catch (error) {
+    console.error("❌ Error in getMatchesByDate:", error.response?.data || error.message);
+    return [];
+  }
+}
+  
   // ✅ جلب مباريات أسبوع فات + أسبوع جاي
   async getMatchesOneWeekRange() {
     try {
