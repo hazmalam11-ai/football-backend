@@ -151,22 +151,32 @@ const leaguesRoutes = require("./routes/leagues");
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
 
+// ===============================
 // ✅ Use Routes
+
 app.use("/auth", authRoutes);
 app.use("/teams", teamRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/coaches", coachRoutes);
 app.use("/tournaments", tournamentRoutes);
-app.use("/matches", matchRoutes);
+
+// ⚠️ نقلنا /matches تحت /api/football
+// app.use("/matches", matchRoutes);  ❌ غلط — تم إزالته
+
 app.use("/news", newsRoutes);
 app.use("/news-comments", newsCommentRoutes);
 app.use("/comments", commentRoutes);
 app.use("/likes", likesRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/users", usersRoutes);
+
+// ===============================
+// ✅ Football API Namespace
 app.use("/api/football", footballRoutes);
+app.use("/api/football/matches", matchRoutes);  // ← هنا مكانه الصح 👌
 app.use("/api/leagues", leaguesRoutes);
 
+// ===============================
 // Fantasy APIs
 app.use("/fantasy/teams", fantasyTeamRoutes);
 app.use("/fantasy/gameweeks", fantasyGameweekRoutes);
@@ -175,6 +185,7 @@ app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
 
+// ===============================
 // Match Data APIs
 app.use("/api/match-data", matchDataRoutes);
 
