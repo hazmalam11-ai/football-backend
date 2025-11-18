@@ -1,3 +1,6 @@
+const axios = require("axios");
+
+class FootballAPIService {
 constructor() {
   this.baseURL = "https://v3.football.api-sports.io";
   this.apiKey = process.env.FOOTBALL_API_KEY;
