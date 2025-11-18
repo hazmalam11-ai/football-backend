@@ -1,21 +1,19 @@
-// services/footballAPI.js
-const axios = require("axios");
+constructor() {
+  this.baseURL = "https://v3.football.api-sports.io";
+  this.apiKey = process.env.FOOTBALL_API_KEY;
 
-class FootballAPIService {
-  constructor() {
-    this.baseURL = "https://v3.football.api-sports.io";
-    this.apiKey = process.env.FOOTBALL_API_KEY;
+  this.api = axios.create({
+    baseURL: this.baseURL,
+    headers: {
+      "x-apisports-key": this.apiKey,
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    timeout: 20000,
+  });
 
-    this.api = axios.create({
-      baseURL: this.baseURL,
-      headers: {
-        "x-apisports-key": this.apiKey,
-      },
-      timeout: 15000,
-    });
-
-    console.log("⚙️ Using API KEY:", this.apiKey ? "Loaded ✅" : "❌ Missing");
-  }
+  console.log("⚙️ Using API KEY:", this.apiKey ? "Loaded ✅" : "❌ Missing");
+}
 
   // ✅ جلب المباريات المباشرة - Direct from API-Football documentation
   async getLiveMatches() {
