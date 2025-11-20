@@ -65,14 +65,18 @@ const numCPUs = os.cpus().length;
 if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
   console.log(`Master process ${process.pid} starting ${numCPUs} workers...`);
 
+  // Fork workers
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
+  // Restart workers on crash
   cluster.on("exit", (worker) => {
     console.log(`⚠️ Worker ${worker.process.pid} died — restarting...`);
     cluster.fork();
   });
+
+  return; // Master stops here
 } else {
   const app = express();
   const server = http.createServer(app);
