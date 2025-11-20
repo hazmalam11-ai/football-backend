@@ -1,4 +1,3 @@
-```javascript
 /**
  * 🚀 ULTRA-SECURE & LIGHTNING-FAST Server - Enterprise Grade
  * 
@@ -45,6 +44,7 @@ const errorHandler = require("./middlewares/errorHandler");
 // 🔧 Environment Configuration
 // ===============================
 dotenv.config();
+
 const PORT = process.env.PORT || 5050;
 const MONGO_URI = process.env.MONGO_URI;
 const API_KEY = process.env.FOOTBALL_API_KEY;
@@ -53,7 +53,7 @@ const CLUSTER_MODE = process.env.CLUSTER_MODE === "true";
 
 // Validate critical env vars
 if (!API_KEY) {
-  console.warn("⚠️  FOOTBALL_API_KEY missing in .env");
+  console.warn("⚠️ FOOTBALL_API_KEY missing in .env");
 } else {
   console.log("✅ Football API key loaded");
 }
@@ -70,15 +70,20 @@ const numCPUs = os.cpus().length;
 
 if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
   console.log(`🏭 Master process ${process.pid} starting ${numCPUs} workers...`);
-  
+
+  // Fork workers
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
-  cluster.on("exit", (worker, code, signal) => {
-    console.log(`⚠️  Worker ${worker.process.pid} died. Spawning new worker...`);
+  // Restart on crash
+  cluster.on("exit", (worker) => {
+    console.log(`⚠️ Worker ${worker.process.pid} died — restarting...`);
     cluster.fork();
   });
+
+  return; // Master stops here
+}
 
 } else {
   // ===============================
