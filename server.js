@@ -656,7 +656,9 @@ if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
     console.log("=".repeat(60) + "\n");
   });
 
-  // Memory monitoring
+  // ===============================
+  // 🧠 Memory Monitoring
+  // ===============================
   setInterval(() => {
     const used = process.memoryUsage();
     if (used.heapUsed / used.heapTotal > 0.9) {
@@ -665,10 +667,12 @@ if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
         heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
         percentage: `${Math.round((used.heapUsed / used.heapTotal) * 100)}%`
       });
-    
     }
-  }, 60000); // Check every minute
+  }, 60000); // every minute
 
 } // ← قفلة else الأساسية هنا فقط
 
+// ===============================
+// 📝 Export for testing
+// ===============================
 module.exports = server;
