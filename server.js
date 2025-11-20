@@ -70,21 +70,18 @@ const numCPUs = os.cpus().length;
 
 if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
   console.log(`Master process ${process.pid} starting ${numCPUs} workers...`);
-  // Fork workers
+
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
 
-  // Restart on crash
   cluster.on("exit", (worker) => {
     console.log(`⚠️ Worker ${worker.process.pid} died — restarting...`);
     cluster.fork();
   });
 
   return; // Master stops here
-}
-// ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓  IMPORTANT
-// هنا مفيش "else {" فوقه قوس زيادة
+} else {
   // ===============================
   // ⚙️  Express / HTTP / Socket Setup
   // ===============================
