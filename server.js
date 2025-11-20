@@ -665,10 +665,10 @@ if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
         heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
         percentage: `${Math.round((used.heapUsed / used.heapTotal) * 100)}%`
       });
+    
     }
   }, 60000); // Check every minute
-  } 
-// ===============================
-// 📝 Export for testing
-// ===============================
+
+} // ← قفلة else الأساسية هنا فقط
+
 module.exports = server;
