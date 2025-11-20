@@ -1,4 +1,14 @@
-// server.js (Enhanced with Socket.io + Football API + Fantasy + Sync Services)
+/**
+ * 🚀 Ultimate server.js – Optimized for speed, security, and scalability
+ * Features:
+ * - Helmet + Rate Limiter + CORS
+ * - MongoDB stable connection
+ * - Unified JSON handling
+ * - Socket.io live updates
+ * - Auto Fantasy + Sync jobs
+ * - Strict routing organization
+ */
+
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
@@ -6,178 +16,164 @@ const morgan = require("morgan");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const bodyParser = require("body-parser");
 const http = require("http");
 const { Server } = require("socket.io");
 const errorHandler = require("./middlewares/errorHandler");
 
-// ✅ تحميل متغيرات البيئة
+// ===============================
+// 🔧 Load environment variables
+// ===============================
 dotenv.config();
+const PORT = process.env.PORT || 5050;
+const MONGO_URI = process.env.MONGO_URI;
+const API_KEY = process.env.FOOTBALL_API_KEY;
 
-// ✅ تحقق من API Key
-if (!process.env.FOOTBALL_API_KEY) {
-  console.error("❌ Football API Key is missing! أضف FOOTBALL_API_KEY في ملف .env");
+if (!API_KEY) {
+  console.warn("⚠️ FOOTBALL_API_KEY missing in .env");
 } else {
-  console.log("⚽ Using API KEY:", process.env.FOOTBALL_API_KEY);
+  console.log("✅ Football API key loaded");
 }
 
+// ===============================
+// ⚙️ Express / HTTP / Socket setup
+// ===============================
 const app = express();
 const server = http.createServer(app);
-const PORT = process.env.PORT || 5050;
-
-// ✅ Socket.io Setup
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
-  : ["http://localhost:3000", "http://192.168.1.8:3000"];
-
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
-  },
+  cors: { origin: process.env.ALLOWED_ORIGINS?.split(",") || "*", credentials: true }
 });
 
-// ✅ Middleware
-app.use(express.json({ charset: 'utf-8' }));
-app.use(bodyParser.json({ charset: 'utf-8' }));
-app.use(morgan("dev"));
+// ===============================
+// 🧱 Core middlewares (ordered for performance)
+// ===============================
 
-// Ensure UTF-8 encoding for all responses (except static files)
-app.use((req, res, next) => {
-  // Skip setting Content-Type for static files (images, etc.)
-  if (!req.path.startsWith('/uploads/')) {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  }
-  next();
-});
-// Configure helmet to allow cross-origin images (for admin on :3000 fetching :5050 uploads)
+// Security headers first
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false,
   })
 );
 
-// ✅ CORS
+// Logging
+if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
+
+// JSON parsing
+app.use(express.json({ limit: "10mb" }));
+
+// CORS config
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : ["http://localhost:3000", "https://mal3abak.com"];
+
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      cb(new Error("Not allowed by CORS"));
     },
     credentials: true,
   })
 );
 
-// Ensure CORS headers for static assets (uploads)
+// Global rate limiter
+app.use(
+  rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 600,
+    message: { success: false, message: "Too many requests, try again later." },
+  })
+);
+
+// UTF-8 enforcement
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
-    res.setHeader('Vary', 'Origin');
-  }
+  if (!req.path.startsWith("/uploads/"))
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
   next();
 });
 
-// ✅ Rate Limiter
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  message: { message: "Too many requests, please try again later." },
-});
-app.use(limiter);
+// Static uploads
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static("uploads", { maxAge: "30d", etag: true })
+);
 
-// ✅ MongoDB Connection
+// ===============================
+// 💾 MongoDB connection
+// ===============================
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("✅ MongoDB connected successfully"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
+  .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => {
+    console.error("❌ Mongo connection error:", err);
+    process.exit(1);
+  });
 
-// ✅ Make io available to routes
+// Make io accessible
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// ✅ Static folder for uploads (🖼️ الصور) with permissive CORP for images
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    // Set proper content type for images
-    if (req.path.match(/\.(png)$/i)) {
-      res.setHeader('Content-Type', 'image/png');
-    } else if (req.path.match(/\.(webp)$/i)) {
-      res.setHeader('Content-Type', 'image/webp');
-    } else if (req.path.match(/\.(jpg|jpeg)$/i)) {
-      res.setHeader('Content-Type', 'image/jpeg');
-    } else if (req.path.match(/\.(gif)$/i)) {
-      res.setHeader('Content-Type', 'image/gif');
-    }
-    next();
-  },
-  express.static("uploads")
-);
-
 // ===============================
-// ✅ Routes
+// 🧩 Routes imports
+// ===============================
 const authRoutes = require("./routes/auth");
 const teamRoutes = require("./routes/teams");
 const playerRoutes = require("./routes/players");
 const coachRoutes = require("./routes/coaches");
 const tournamentRoutes = require("./routes/tournaments");
 const matchRoutes = require("./routes/matches");
+const footballRoutes = require("./routes/football");
+const leaguesRoutes = require("./routes/leagues");
 const newsRoutes = require("./routes/news");
 const commentRoutes = require("./routes/comments");
 const newsCommentRoutes = require("./routes/newsComments");
 const likesRoutes = require("./routes/likes");
 const dashboardRoutes = require("./routes/dashboard");
-const footballRoutes = require("./routes/football");
 const usersRoutes = require("./routes/users");
 
-// ✅ Fantasy Routes
+// Fantasy
 const fantasyTeamRoutes = require("./routes/fantasyTeams");
 const fantasyGameweekRoutes = require("./routes/fantasyGameweeks");
 const fantasyLeaderboardRoutes = require("./routes/fantasyLeaderboard");
 const fantasyScoringRoutes = require("./routes/fantasyScoring");
 const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
-const leaguesRoutes = require("./routes/leagues");
+
+// Others
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
 
 // ===============================
-// ✅ Use Routes
-
+// 🧭 Routes mounting
+// ===============================
 app.use("/auth", authRoutes);
 app.use("/teams", teamRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/coaches", coachRoutes);
 app.use("/tournaments", tournamentRoutes);
-
-// ⚠️ نقلنا /matches تحت /api/football
-// app.use("/matches", matchRoutes);  ❌ غلط — تم إزالته
-
 app.use("/news", newsRoutes);
-app.use("/news-comments", newsCommentRoutes);
 app.use("/comments", commentRoutes);
+app.use("/news-comments", newsCommentRoutes);
 app.use("/likes", likesRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/users", usersRoutes);
 
-// ===============================
-// ✅ Football API Namespace
-app.use("/api/football", footballRoutes);
-app.use("/matches", matchRoutes);  // ← هنا مكانه الصح 👌
-app.use("/api/leagues", leaguesRoutes);
+// ⚽ Football & Matches
+app.use("/api/football", footballRoutes); // unified path
+app.use("/matches", matchRoutes);
 
-// ===============================
-// Fantasy APIs
+// Leagues / Data
+app.use("/api/leagues", leaguesRoutes);
+app.use("/api/match-data", matchDataRoutes);
+app.use("/api/insights", insightsRoutes);
+
+// Fantasy
 app.use("/fantasy/teams", fantasyTeamRoutes);
 app.use("/fantasy/gameweeks", fantasyGameweekRoutes);
 app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
@@ -186,154 +182,63 @@ app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
 
 // ===============================
-// Match Data APIs
-app.use("/api/match-data", matchDataRoutes);
-
-// ✅ Insights APIs
-app.use("/api/insights", insightsRoutes);
-
+// 💬 Socket.io Events
 // ===============================
-// ✅ Socket.io Live Updates
 io.on("connection", (socket) => {
-  console.log(`👤 User connected: ${socket.id}`);
+  console.log(`🔌 Socket connected: ${socket.id}`);
 
-  socket.on("join-match", (matchId) => {
-    socket.join(`match-${matchId}`);
-    console.log(`👤 User ${socket.id} joined match ${matchId}`);
-  });
+  socket.on("join-match", (id) => socket.join(`match-${id}`));
+  socket.on("leave-match", (id) => socket.leave(`match-${id}`));
 
-  socket.on("leave-match", (matchId) => {
-    socket.leave(`match-${matchId}`);
-    console.log(`👤 User ${socket.id} left match ${matchId}`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`👋 User disconnected: ${socket.id}`);
-  });
+  socket.on("disconnect", () => console.log(`❌ Socket ${socket.id} disconnected`));
 });
 
 // ===============================
-// ✅ Live Match Updates Functions
-const sendLiveScoreUpdate = (matchId, scoreData) => {
-  io.to(`match-${matchId}`).emit("score-update", {
-    matchId,
-    homeScore: scoreData.homeScore,
-    awayScore: scoreData.awayScore,
-    timestamp: new Date(),
-  });
-};
+// 📡 Live update emitters (helpers)
+// ===============================
+global.sendLiveScoreUpdate = (id, data) =>
+  io.to(`match-${id}`).emit("score-update", { matchId: id, ...data, ts: new Date() });
 
-const sendMatchEvent = (matchId, eventData) => {
-  io.to(`match-${matchId}`).emit("match-event", {
-    matchId,
-    type: eventData.type,
-    minute: eventData.minute,
-    player: eventData.player,
-    team: eventData.team,
-    description: eventData.description,
-    timestamp: new Date(),
-  });
-};
+global.sendMatchEvent = (id, data) =>
+  io.to(`match-${id}`).emit("match-event", { matchId: id, ...data, ts: new Date() });
 
-const sendMatchStatusUpdate = (matchId, status) => {
-  io.to(`match-${matchId}`).emit("match-status", {
-    matchId,
-    status,
-    timestamp: new Date(),
-  });
-};
-
-global.sendLiveScoreUpdate = sendLiveScoreUpdate;
-global.sendMatchEvent = sendMatchEvent;
-global.sendMatchStatusUpdate = sendMatchStatusUpdate;
+global.sendMatchStatusUpdate = (id, status) =>
+  io.to(`match-${id}`).emit("match-status", { matchId: id, status, ts: new Date() });
 
 // ===============================
-// ✅ Array مؤقتة لتسجيل المستخدمين
-let users = [];
-
-app.post("/api/register", (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "الرجاء إدخال اسم المستخدم وكلمة المرور" });
-  }
-
-  const newUser = { username, password };
-  users.push(newUser);
-
-  res.json({ message: "تم التسجيل بنجاح ✅", user: newUser });
-});
-
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
-
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
-
-  if (!user) {
-    return res
-      .status(401)
-      .json({ error: "❌ اسم المستخدم أو كلمة المرور غير صحيحة" });
-  }
-
-  res.json({ message: "✅ تم تسجيل الدخول بنجاح", user });
-});
+// 🧪 Testing + Health check
+// ===============================
+app.get("/", (_, res) =>
+  res.json({ message: "⚽ Mal3abak backend running", uptime: process.uptime() })
+);
+app.get("/health", (_, res) => res.json({ status: "ok", db: mongoose.connection.readyState }));
 
 // ===============================
-// ✅ Test API لتجربة Live Updates
-app.post("/api/test-live-update", (req, res) => {
-  const { matchId, type, data } = req.body;
-
-  if (type === "score") {
-    sendLiveScoreUpdate(matchId, data);
-  } else if (type === "event") {
-    sendMatchEvent(matchId, data);
-  } else if (type === "status") {
-    sendMatchStatusUpdate(matchId, data.status);
-  }
-
-  res.json({ message: "Live update sent successfully!" });
-});
-
-// ✅ Test routes
-app.get("/", (req, res) => {
-  res.send("🚀 Football API with Fantasy + Live Updates running!");
-});
-
-app.get("/api/test", (req, res) => {
-  res.json({ message: "Hello from backend with Socket.io + Fantasy!" });
-});
-
-// ✅ Error Handler
+// 🧰 Error handler
+// ===============================
 app.use(errorHandler);
 
 // ===============================
-// ✅ تشغيل Sync Services
+// 🔁 Auto background jobs
+// ===============================
 const { updateGameweekPoints } = require("./services/fantasyScoring");
-
-// 🟢 تحديث النقاط (Fantasy) كل 5 دقايق
+const Gameweek = require("./models/Gameweek");
 setInterval(async () => {
   try {
-    const activeGameweek = await require("./models/Gameweek").findOne({ isActive: true });
-    if (activeGameweek) {
-      await updateGameweekPoints(activeGameweek._id);
-    }
+    const gw = await Gameweek.findOne({ isActive: true });
+    if (gw) await updateGameweekPoints(gw._id);
   } catch (err) {
-    console.error("❌ Error updating fantasy points:", err.message);
+    console.error("❌ Fantasy update failed:", err.message);
   }
-}, 1000 * 60 * 5);
+}, 5 * 60 * 1000);
 
-// 🟢 Auto Sync System (Matches + Live)
-require("./services/autoSync.js"); // ✅ هنا الاصلاح
+// Auto sync services
+require("./services/autoSync");
+require("./services/autoGameweekService").start();
 
-// 🟢 Auto Gameweek Management System
-const autoGameweekService = require("./services/autoGameweekService");
-autoGameweekService.start(); // ✅ Start auto gameweek management
-
-// ✅ Start server
+// ===============================
+// 🚀 Start server
+// ===============================
 server.listen(PORT, () =>
-  console.log(`🚀 Server with Fantasy running at http://localhost:${PORT}`)
+  console.log(`🚀 Backend ready on http://localhost:${PORT} [Mode=${process.env.NODE_ENV || "dev"}]`)
 );
