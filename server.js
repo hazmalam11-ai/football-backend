@@ -69,8 +69,7 @@ if (!MONGO_URI) {
 const numCPUs = os.cpus().length;
 
 if (CLUSTER_MODE && cluster.isMaster && NODE_ENV === "production") {
-  console.log(`🏭 Master process ${process.pid} starting ${numCPUs} workers...`);
-
+  console.log(`Master process ${process.pid} starting ${numCPUs} workers...`);
   // Fork workers
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
