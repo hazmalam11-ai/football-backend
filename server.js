@@ -199,6 +199,7 @@ const fantasyLeaderboardRoutes = require("./routes/fantasyLeaderboard");
 const fantasyGameweekRoutes = require("./routes/fantasygameweeks");
 const fantasyScoringRoutes = require("./routes/fantasyScoring");
 const appLeaderboardRoutesoutesoutesoutes = require("./routes/fantasyPoints");
+const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
