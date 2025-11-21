@@ -30,7 +30,6 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
-const xss = require("xss-clean");
 const hpp = require("hpp");
 const compression = require("compression");
 const http = require("http");
@@ -101,7 +100,6 @@ app.use(
 );
 
 app.use(mongoSanitize());
-app.use(xss());
 app.use(hpp({ whitelist: ["page", "limit", "sort", "fields", "filter"] }));
 app.use(
   compression({
