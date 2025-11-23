@@ -1,3 +1,4 @@
+
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -13,7 +14,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.join(__dirname, "../uploads/news");
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true }); // يعمل فولدر لو مش موجود
+      fs.mkdirSync(dir, { recursive: true });
     }
     cb(null, dir);
   },
@@ -24,7 +25,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Normalize boolean-like payloads coming as strings from forms
 function parseBoolean(value) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value === 1;
@@ -41,7 +41,7 @@ router.post(
   "/",
   requireAuth,
   authorize("admin", "editor"),
-  upload.single("image"), // هنا بنرفع صورة باسم field "image"
+  upload.single("image"),
   async (req, res, next) => {
     try {
       const { title, content, category, isFeatured } = req.body;
@@ -50,12 +50,9 @@ router.post(
         throw new Error("title and content are required");
       }
 
-      // لو فيه صورة
       const imageUrl = req.file ? `/uploads/news/${req.file.filename}` : null;
-
       const willBeFeatured = parseBoolean(isFeatured);
 
-      // If setting this news as featured, remove featured from others first
       if (willBeFeatured) {
         await News.updateMany({ isFeatured: true }, { $set: { isFeatured: false } });
       }
@@ -87,7 +84,6 @@ router.get("/", async (req, res, next) => {
 
     const userId = req.user?.id || null;
     
-    // Get comment counts for all news items
     const newsWithLikesAndComments = await Promise.all(
       news.map(async (item) => {
         const likedByUser = userId ? item.likes.includes(userId) : false;
@@ -108,7 +104,105 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// 📌 خبر واحد
+// 🌐 عرض صفحة HTML للخبر (للمشاركة على فيسبوك وواتساب)
+router.get("/:id/preview", async (req, res, next) => {
+  try {
+    const item = await News.findById(req.params.id).populate("author", "username");
+    if (!item) {
+      return res.status(404).send("<h1>News not found</h1>");
+    }
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const newsUrl = `${baseUrl}/news/${item._id}`;
+    const imageUrl = item.imageUrl ? `${baseUrl}${item.imageUrl}` : `${baseUrl}/default-news-image.jpg`;
+    const description = item.content.substring(0, 155).replace(/<[^>]*>/g, ''); // إزالة HTML tags
+
+    const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Open Graph Tags للفيسبوك وواتساب -->
+    <meta property="og:title" content="${item.title}">
+    <meta property="og:description" content="${description}">
+    <meta property="og:image" content="${imageUrl}">
+    <meta property="og:url" content="${newsUrl}">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Mal3abak - Your Football Stadium">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${item.title}">
+    <meta name="twitter:description" content="${description}">
+    <meta name="twitter:image" content="${imageUrl}">
+    
+    <title>${item.title} | Mal3abak</title>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .news-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .content {
+            line-height: 1.8;
+            color: #666;
+        }
+        .author {
+            color: #999;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+    </style>
+    
+    <!-- إعادة توجيه بعد 3 ثواني للأبلكيشن -->
+    <meta http-equiv="refresh" content="3;url=mal3abak://news/${item._id}">
+</head>
+<body>
+    <div class="news-container">
+        <h1>${item.title}</h1>
+        ${item.imageUrl ? `<img src="${imageUrl}" alt="${item.title}">` : ''}
+        <div class="content">${item.content}</div>
+        <div class="author">كتبه: ${item.author?.username || 'مجهول'}</div>
+    </div>
+    
+    <script>
+        // محاولة فتح التطبيق
+        setTimeout(() => {
+            window.location.href = "mal3abak://news/${item._id}";
+        }, 100);
+    </script>
+</body>
+</html>
+    `;
+
+    res.send(html);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 📌 خبر واحد (API)
 router.get("/:id", async (req, res, next) => {
   try {
     const item = await News.findById(req.params.id).populate("author", "username");
