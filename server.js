@@ -38,7 +38,7 @@ const os = require("os");
 const errorHandler = require("./middlewares/errorHandler");
 const path = require("path");
 dotenv.config();
-
+const sitemap = require("./sitemap");
 // ===============================
 // 🔧 Environment Configuration
 // ===============================
@@ -233,7 +233,7 @@ app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
 app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
-
+app.use(sitemap);
 // ===============================
 // 💬 Socket.io Events
 // ===============================
