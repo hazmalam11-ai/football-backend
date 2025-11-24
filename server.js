@@ -233,7 +233,7 @@ app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
 app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
-app.use("/", sitemapRoutes);
+app.use("/sitemaps", sitemapRoutes);
 // ===============================
 // 💬 Socket.io Events
 // ===============================
