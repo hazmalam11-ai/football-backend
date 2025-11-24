@@ -1,10 +1,12 @@
 const express = require("express");
 const router = express.Router();
+
 // MODELS
 const News = require("../models/news.js");
 const Match = require("../models/match.js");
-const Team = require("../models/Team.js");     // ← كدا صح
-const Player = require("../models/Player.js"); // ← كدا صح
+const Team = require("../models/Team.js");
+const Player = require("../models/Player.js");
+
 router.get("/sitemap.xml", async (req, res) => {
   try {
     const baseUrl = "https://mal3abak.com";
@@ -108,7 +110,6 @@ router.get("/sitemap.xml", async (req, res) => {
 
     res.header("Content-Type", "application/xml");
     res.send(xml);
-
   } catch (err) {
     console.error("Sitemap error:", err);
     res.status(500).send("Error generating sitemap");
