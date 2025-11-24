@@ -1,11 +1,13 @@
 const express = require("express");
 const router = express.Router();
+const express = require("express");
+const router = express.Router();
 
+// MODELS
 const News = require("../models/news.js");
 const Match = require("../models/match.js");
-const Team = require("../models/team.js");
-const Player = require("../models/player.js");
-
+const Team = require("../models/Team.js");     // ← كدا صح
+const Player = require("../models/Player.js"); // ← كدا صح
 router.get("/sitemap.xml", async (req, res) => {
   try {
     const baseUrl = "https://mal3abak.com";
