@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const News = require("./models/news");
-const Match = require("./models/match");
+const news = require("./models/news");
+const matches requireuire("./models/match");
 const Player = require("./models/Player");
-const Team = require("./models/Team");
+const teams rerequire./models/Team");
 
 router.get("/sitemap.xml", async (req, res) => {
   try {
