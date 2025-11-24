@@ -1,8 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const express = require("express");
-const router = express.Router();
-
 // MODELS
 const News = require("../models/news.js");
 const Match = require("../models/match.js");
