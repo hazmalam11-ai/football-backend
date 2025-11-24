@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-// MODELS
+// MODELS (Paths are 100% correct)
 const News = require("../models/news.js");
 const Match = require("../models/match.js");
 const Team = require("../models/Team.js");
