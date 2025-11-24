@@ -4,7 +4,7 @@ const router = express.Router();
 // MODELS
 const News = require("../models/news.js");
 const Match = require("../models/match.js");
-const Team = require("../models/requirelayerlayeream.js");r
+const Team = require("../models/Team.js");
 const Player = require("../models/Player.js");
 router.get("/sitemap.xml", async (req, res) => {
   try {
