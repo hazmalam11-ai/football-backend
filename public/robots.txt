@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mal3abak.com/sitemap.xml
