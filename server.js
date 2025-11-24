@@ -207,7 +207,7 @@ const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
-
+const sitemapRoutes = require("./routes/sitemap");
 // ===============================
 // 🧭 Route Mounting
 // ===============================
@@ -233,7 +233,7 @@ app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
 app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
-app.use(sitemap);
+app.use("/", sitemapRoutes);
 // ===============================
 // 💬 Socket.io Events
 // ===============================
