@@ -394,18 +394,18 @@ setTimeout(startBackgroundServices, 5000);
 // ===============================
 let serverInstance;
 
+
 const startServer = () => {
   serverInstance = server.listen(PORT, () => {
-    console.log("
-" + "=".repeat(60));
+    console.log("\n" + "=".repeat(60));
     console.log("🚀 MAL3ABAK BACKEND - ULTRA SECURE EDITION");
     console.log("📍 Server: http://localhost:" + PORT);
     console.log("🌍 Environment: " + NODE_ENV);
     console.log("💻 CPU Cores: " + os.cpus().length);
     console.log("🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED");
-    console.log("=".repeat(60) + "
-");
+    console.log("=".repeat(60) + "\n");
   });
+};
 
   serverInstance.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
