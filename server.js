@@ -114,6 +114,17 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // ===============================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
+// ===============================
+// 📌 STATIC SITEMAPS FOLDER
+// ===============================
+app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps"), {
+  setHeaders: (res) => {
+    res.setHeader("Content-Type", "application/xml");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+}));
 // 🌍 CORS Configuration
 // ===============================
 const allowedOrigins = process.env.ALLOWED_ORIGINS
