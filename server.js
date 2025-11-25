@@ -305,6 +305,13 @@ app.get("/", (req, res) => {
 // 🚫 404 + Error Handling
 // ===============================
 app.use((req, res) => {
+// 👉 Add sitemap routes BEFORE 404
+app.use("/", require("./routes/sitemap"));
+
+// ===============================
+// 🚫 404 Handler
+// ===============================
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "Route not found",
@@ -312,8 +319,10 @@ app.use((req, res) => {
   });
 });
 
+// ===============================
+// ❗ Error Handler (must stay last)
+// ===============================
 app.use(errorHandler);
-
 // ===============================
 // 🔁 Background Jobs
 // ===============================
