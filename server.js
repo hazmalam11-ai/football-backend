@@ -202,7 +202,7 @@ const fantasyTeamRoutes = require("./routes/fantasyTeams");
 const fantasyLeaderboardRoutes = require("./routes/fantasyLeaderboard");
 const fantasyGameweekRoutes = require("./routes/fantasygameweeks");
 const fantasyScoringRoutes = require("./routes/fantasyScoring");
-const appLeaderboardRoutesoutesoutesoutes = require("./routes/fantasyPoints");
+const appLeaderboardRoutes = require("./routes/fantasyPoints");
 const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
 const matchDataRoutes = require("./routes/matchData");
@@ -233,7 +233,7 @@ app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
 app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
-app.use("/sitemaps", sitemapRoutes);
+app.use("/sitemaps", sitemap);
 // ===============================
 // 💬 Socket.io Events
 // ===============================
