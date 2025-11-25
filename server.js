@@ -304,7 +304,6 @@ app.get("/", (req, res) => {
 // ===============================
 // 🚫 404 + Error Handling
 // ===============================
-app.use((req, res) => {
 // 👉 Add sitemap routes BEFORE 404
 app.use("/", require("./routes/sitemap"));
 
