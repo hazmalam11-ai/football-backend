@@ -37,8 +37,11 @@ const http = require("http");
 const { Server } = require("socket.io");
 const os = require("os");
 const errorHandler = require("./middlewares/errorHandler");
+<<<<<<< Updated upstream
 const path = require("path");
 
+=======
+>>>>>>> Stashed changes
 dotenv.config();
 
 // ===============================
@@ -62,6 +65,7 @@ if (!MONGO_URI) {
 // ⚙️ Express / HTTP / Socket.io
 // ===============================
 const app = express();
+app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps")));
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -340,3 +344,9 @@ setInterval(() => {
 }, 60000);
 
 module.exports = server;
+
+// ===============================
+// STATIC SITEMAPS FOLDER
+// ===============================
+app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps")));
+
