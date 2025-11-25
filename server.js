@@ -35,10 +35,14 @@ const compression = require("compression");
 const http = require("http");
 const { Server } = require("socket.io");
 const os = require("os");
-const errorHandler = require("./middlewares/errorHandler");
 const path = require("path");
+const fs = require("fs");
+const errorHandler = require("./middlewares/errorHandler");
 
 dotenv.config();
+
+// Increase max listeners to prevent memory leak warnings
+require('events').EventEmitter.defaultMaxListeners = 20;
 
 // ===============================
 // 🔧 Environment Configuration
@@ -78,7 +82,8 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6,
   transports: ["websocket", "polling"],
 });
- 
+
+// ===============================
 // 🛡️ Security Middlewares
 // ===============================
 app.use(
@@ -105,7 +110,7 @@ app.use(
   })
 );
 
-// basic sanitization and security
+// Basic sanitization and security
 app.use(mongoSanitize());
 app.use(hpp({ whitelist: ["page", "limit", "sort", "fields", "filter"] }));
 app.use(
@@ -118,23 +123,25 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ===============================
-// 📁 Static Files (IMPORTANT!)
+// 📁 Static Files with Directory Checks
 // ===============================
-// ensure these directories exist on the server or adjust paths accordingly
+const staticDirs = ["uploads", "public", "sitemaps"];
+staticDirs.forEach((dir) => {
+  const dirPath = path.join(__dirname, dir);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    console.log(`📁 Created directory: ${dir}`);
+  }
+});
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/public", express.static(path.join(__dirname, "public")));
-
-// ===============================
-// 📌 STATIC SITEMAPS FOLDER
-// expose folder that contains pre-generated sitemap XML files
 app.use(
   "/sitemaps",
   express.static(path.join(__dirname, "sitemaps"), {
     setHeaders: (res) => {
       res.setHeader("Content-Type", "application/xml");
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
+      res.setHeader("Cache-Control", "public, max-age=3600");
     },
   })
 );
@@ -149,8 +156,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // allow server-to-server or curl requests
+      if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (NODE_ENV === "development") return cb(null, true);
       console.warn(`🚫 CORS blocked: ${origin}`);
       cb(new Error("Not allowed by CORS"));
     },
@@ -160,35 +168,55 @@ app.use(
 );
 
 // ===============================
-// 🧱 Rate Limiting
+// 🧱 Optimized Rate Limiting (Fixed Memory Leak)
 // ===============================
-const createRateLimiter = (windowMs, max, message) =>
-  rateLimit({
-    windowMs,
-    max,
-    message: { success: false, message },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
+const globalLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
+  message: { success: false, message: "Global rate limit exceeded" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => NODE_ENV === "development" && req.ip === "::1",
+});
 
-app.use(createRateLimiter(10 * 60 * 1000, 600, "Global rate limit exceeded"));
-const authLimiter = createRateLimiter(15 * 60 * 1000, 10, "Too many login attempts");
-const apiLimiter = createRateLimiter(1 * 60 * 1000, 100, "API rate limit exceeded");
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: "Too many login attempts" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 100,
+  message: { success: false, message: "API rate limit exceeded" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => NODE_ENV === "development",
+});
+
+app.use(globalLimiter);
 
 // ===============================
 // 📜 Logging
 // ===============================
-app.use(morgan(NODE_ENV === "production" ? "combined" : "dev"));
+if (NODE_ENV === "production") {
+  app.use(morgan("combined"));
+} else {
+  app.use(morgan("dev"));
+}
 app.set("trust proxy", 1);
 
 // ===============================
 // 💾 MongoDB Connection
 // ===============================
 const mongoOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   maxPoolSize: 10,
   socketTimeoutMS: 45000,
+  serverSelectionTimeoutMS: 5000,
+  family: 4,
 };
 
 mongoose
@@ -199,6 +227,14 @@ mongoose
     process.exit(1);
   });
 
+mongoose.connection.on("disconnected", () => {
+  console.warn("⚠️ MongoDB disconnected. Attempting reconnection...");
+});
+
+mongoose.connection.on("reconnected", () => {
+  console.log("✅ MongoDB reconnected");
+});
+
 // ===============================
 // 🔌 Attach io to Requests
 // ===============================
@@ -208,188 +244,56 @@ app.use((req, res, next) => {
 });
 
 // ===============================
-// 🧩 Routes Import
+// 🧩 Dynamic Routes Import
 // ===============================
-// note: ensure these route files exist; otherwise comment unused ones until implemented
-let authRoutes, teamRoutes, playerRoutes, coachRoutes, tournamentRoutes;
-let matchRoutes, footballRoutes, leaguesRoutes, newsRoutes;
-let commentRoutes, newsCommentRoutes, likesRoutes, dashboardRoutes;
-let usersRoutes, fantasyTeamRoutes, fantasyLeaderboardRoutes;
-let fantasyGameweekRoutes, fantasyScoringRoutes, fantasyPointsRoutes;
-let fantasyMiniLeaguesRoutes, matchDataRoutes, insightsRoutes, sitemapRoutes;
+const routesConfig = [
+  { path: "/auth", file: "./routes/auth", limiter: authLimiter },
+  { path: "/teams", file: "./routes/teams", limiter: apiLimiter },
+  { path: "/api/players", file: "./routes/players", limiter: apiLimiter },
+  { path: "/coaches", file: "./routes/coaches", limiter: apiLimiter },
+  { path: "/tournaments", file: "./routes/tournaments", limiter: apiLimiter },
+  { path: "/news", file: "./routes/news" },
+  { path: "/comments", file: "./routes/comments" },
+  { path: "/news-comments", file: "./routes/newsComments" },
+  { path: "/likes", file: "./routes/likes" },
+  { path: "/dashboard", file: "./routes/dashboard" },
+  { path: "/users", file: "./routes/users" },
+  { path: "/api/football", file: "./routes/football", limiter: apiLimiter },
+  { path: "/matches", file: "./routes/matches" },
+  { path: "/api/leagues", file: "./routes/leagues" },
+  { path: "/api/match-data", file: "./routes/matchData" },
+  { path: "/api/insights", file: "./routes/insights" },
+  { path: "/fantasy/teams", file: "./routes/fantasyTeams" },
+  { path: "/fantasy/gameweeks", file: "./routes/fantasygameweeks" },
+  { path: "/fantasy/leaderboard", file: "./routes/fantasyLeaderboard" },
+  { path: "/fantasy/scoring", file: "./routes/fantasyScoring" },
+  { path: "/fantasy/points", file: "./routes/fantasyPoints" },
+  { path: "/fantasy/mini-leagues", file: "./routes/fantasyMiniLeagues" },
+  { path: "/", file: "./routes/sitemap" },
+];
 
-try {
-  authRoutes = require("./routes/auth");
-} catch (e) {
-  console.warn("routes/auth not found, skipping import");
-  authRoutes = express.Router();
-}
-try {
-  teamRoutes = require("./routes/teams");
-} catch (e) {
-  console.warn("routes/teams not found, skipping import");
-  teamRoutes = express.Router();
-}
-try {
-  playerRoutes = require("./routes/players");
-} catch (e) {
-  console.warn("routes/players not found, skipping import");
-  playerRoutes = express.Router();
-}
-try {
-  coachRoutes = require("./routes/coaches");
-} catch (e) {
-  console.warn("routes/coaches not found, skipping import");
-  coachRoutes = express.Router();
-}
-try {
-  tournamentRoutes = require("./routes/tournaments");
-} catch (e) {
-  console.warn("routes/tournaments not found, skipping import");
-  tournamentRoutes = express.Router();
-}
-try {
-  matchRoutes = require("./routes/matches");
-} catch (e) {
-  console.warn("routes/matches not found, skipping import");
-  matchRoutes = express.Router();
-}
-try {
-  footballRoutes = require("./routes/football");
-} catch (e) {
-  console.warn("routes/football not found, skipping import");
-  footballRoutes = express.Router();
-}
-try {
-  leaguesRoutes = require("./routes/leagues");
-} catch (e) {
-  console.warn("routes/leagues not found, skipping import");
-  leaguesRoutes = express.Router();
-}
-try {
-  newsRoutes = require("./routes/news");
-} catch (e) {
-  console.warn("routes/news not found, skipping import");
-  newsRoutes = express.Router();
-}
-try {
-  commentRoutes = require("./routes/comments");
-} catch (e) {
-  console.warn("routes/comments not found, skipping import");
-  commentRoutes = express.Router();
-}
-try {
-  newsCommentRoutes = require("./routes/newsComments");
-} catch (e) {
-  console.warn("routes/newsComments not found, skipping import");
-  newsCommentRoutes = express.Router();
-}
-try {
-  likesRoutes = require("./routes/likes");
-} catch (e) {
-  console.warn("routes/likes not found, skipping import");
-  likesRoutes = express.Router();
-}
-try {
-  dashboardRoutes = require("./routes/dashboard");
-} catch (e) {
-  console.warn("routes/dashboard not found, skipping import");
-  dashboardRoutes = express.Router();
-}
-try {
-  usersRoutes = require("./routes/users");
-} catch (e) {
-  console.warn("routes/users not found, skipping import");
-  usersRoutes = express.Router();
-}
-try {
-  fantasyTeamRoutes = require("./routes/fantasyTeams");
-} catch (e) {
-  console.warn("routes/fantasyTeams not found, skipping import");
-  fantasyTeamRoutes = express.Router();
-}
-try {
-  fantasyLeaderboardRoutes = require("./routes/fantasyLeaderboard");
-} catch (e) {
-  console.warn("routes/fantasyLeaderboard not found, skipping import");
-  fantasyLeaderboardRoutes = express.Router();
-}
-try {
-  fantasyGameweekRoutes = require("./routes/fantasygameweeks");
-} catch (e) {
-  console.warn("routes/fantasygameweeks not found, skipping import");
-  fantasyGameweekRoutes = express.Router();
-}
-try {
-  fantasyScoringRoutes = require("./routes/fantasyScoring");
-} catch (e) {
-  console.warn("routes/fantasyScoring not found, skipping import");
-  fantasyScoringRoutes = express.Router();
-}
-try {
-  fantasyPointsRoutes = require("./routes/fantasyPoints");
-} catch (e) {
-  console.warn("routes/fantasyPoints not found, skipping import");
-  fantasyPointsRoutes = express.Router();
-}
-try {
-  fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
-} catch (e) {
-  console.warn("routes/fantasyMiniLeagues not found, skipping import");
-  fantasyMiniLeaguesRoutes = express.Router();
-}
-try {
-  matchDataRoutes = require("./routes/matchData");
-} catch (e) {
-  console.warn("routes/matchData not found, skipping import");
-  matchDataRoutes = express.Router();
-}
-try {
-  insightsRoutes = require("./routes/insights");
-} catch (e) {
-  console.warn("routes/insights not found, skipping import");
-  insightsRoutes = express.Router();
-}
-try {
-  sitemapRoutes = require("./routes/sitemap");
-} catch (e) {
-  console.warn("routes/sitemap not found, skipping import");
-  sitemapRoutes = express.Router();
-}
-
-// ===============================
-// 🧭 Route Mounting
-// ===============================
-app.use("/auth", authLimiter, authRoutes);
-app.use("/teams", apiLimiter, teamRoutes);
-app.use("/api/players", apiLimiter, playerRoutes);
-app.use("/coaches", apiLimiter, coachRoutes);
-app.use("/tournaments", apiLimiter, tournamentRoutes);
-app.use("/news", newsRoutes);
-app.use("/comments", commentRoutes);
-app.use("/news-comments", newsCommentRoutes);
-app.use("/likes", likesRoutes);
-app.use("/dashboard", dashboardRoutes);
-app.use("/users", usersRoutes);
-app.use("/api/football", apiLimiter, footballRoutes);
-app.use("/matches", matchRoutes);
-app.use("/api/leagues", leaguesRoutes);
-app.use("/api/match-data", matchDataRoutes);
-app.use("/api/insights", insightsRoutes);
-app.use("/fantasy/teams", fantasyTeamRoutes);
-app.use("/fantasy/gameweeks", fantasyGameweekRoutes);
-app.use("/fantasy/leaderboard", fantasyLeaderboardRoutes);
-app.use("/fantasy/scoring", fantasyScoringRoutes);
-app.use("/fantasy/points", fantasyPointsRoutes);
-app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
-// sitemap routes mounted at root for compatibility with nginx configs
-app.use("/", sitemapRoutes);
+routesConfig.forEach(({ path, file, limiter }) => {
+  try {
+    const route = require(file);
+    if (limiter) {
+      app.use(path, limiter, route);
+    } else {
+      app.use(path, route);
+    }
+    console.log(`✅ Loaded route: ${path}`);
+  } catch (err) {
+    console.warn(`⚠️ Route ${file} not found or failed to load`);
+  }
+});
 
 // ===============================
 // 💬 Socket.io Events
 // ===============================
+const activeConnections = new Set();
+
 io.on("connection", (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
+  activeConnections.add(socket.id);
+  console.log(`🔌 Socket connected: ${socket.id} (Total: ${activeConnections.size})`);
 
   socket.on("join-match", (id) => {
     if (!id || typeof id !== "string") return;
@@ -401,10 +305,17 @@ io.on("connection", (socket) => {
     socket.leave(`match-${id}`);
   });
 
-  socket.on("disconnect", (reason) => console.log(`❌ Socket disconnected: ${reason}`));
+  socket.on("disconnect", (reason) => {
+    activeConnections.delete(socket.id);
+    console.log(`❌ Socket disconnected: ${reason} (Total: ${activeConnections.size})`);
+  });
+
+  socket.on("error", (error) => {
+    console.error(`❌ Socket error: ${error.message}`);
+  });
 });
 
-// helper to broadcast live score updates
+// Helper to broadcast live score updates
 global.sendLiveScoreUpdate = (id, data) => {
   if (!id || !data) return;
   io.to(`match-${id}`).emit("score-update", { matchId: id, ...data, ts: Date.now() });
@@ -417,18 +328,26 @@ app.get("/", (req, res) => {
   res.json({
     message: "⚽ Mal3abak Backend - Ultra Secure Edition",
     version: "2.0.0",
-    uptime: process.uptime(),
+    uptime: Math.floor(process.uptime()),
     mode: NODE_ENV,
     timestamp: new Date().toISOString(),
+    activeConnections: activeConnections.size,
   });
 });
 
 app.get("/health", (req, res) => {
+  const memoryUsage = process.memoryUsage();
   res.json({
     status: "ok",
     dbConnected: mongoose.connection.readyState === 1,
-    memory: process.memoryUsage(),
+    memory: {
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+    },
     cpu: os.loadavg(),
+    uptime: Math.floor(process.uptime()),
+    socketConnections: activeConnections.size,
   });
 });
 
@@ -436,7 +355,11 @@ app.get("/health", (req, res) => {
 // 🚫 404 + Error Handling
 // ===============================
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: "Route not found" });
+  res.status(404).json({ 
+    success: false, 
+    message: "Route not found",
+    path: req.path 
+  });
 });
 
 app.use(errorHandler);
@@ -444,49 +367,126 @@ app.use(errorHandler);
 // ===============================
 // 🔁 Background Jobs
 // ===============================
-try {
-  // require modules only if they exist, to avoid crash
+const startBackgroundServices = () => {
   try {
     require("./services/autoSync");
+    console.log("✅ AutoSync service started");
   } catch (e) {
-    console.warn("services/autoSync not found or failed to start:", e.message);
-  }
-  try {
-    const ags = require("./services/autoGameweekService");
-    if (ags && typeof ags.start === "function") ags.start();
-  } catch (e) {
-    console.warn("services/autoGameweekService not found or failed to start:", e.message);
+    console.warn("⚠️ AutoSync service not available:", e.message);
   }
 
-  console.log("✅ Background services (attempted) started");
-} catch (err) {
-  console.warn("⚠️ Background services init error:", err.message);
-}
+  try {
+    const ags = require("./services/autoGameweekService");
+    if (ags && typeof ags.start === "function") {
+      ags.start();
+      console.log("✅ AutoGameweek service started");
+    }
+  } catch (e) {
+    console.warn("⚠️ AutoGameweek service not available:", e.message);
+  }
+};
+
+// Delay background service start to avoid startup congestion
+setTimeout(startBackgroundServices, 5000);
 
 // ===============================
 // 🚀 Start Server
 // ===============================
-server.listen(PORT, () => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🚀 MAL3ABAK BACKEND - ULTRA SECURE EDITION");
-  console.log(`📍 Server: http://localhost:${PORT}`);
-  console.log(`🌍 Environment: ${NODE_ENV}`);
-  console.log(`💻 CPU Cores: ${os.cpus().length}`);
-  console.log("🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED");
-  console.log("=".repeat(60) + "\n");
-});
+let serverInstance;
+
+const startServer = () => {
+  serverInstance = server.listen(PORT, () => {
+    console.log("
+" + "=".repeat(60));
+    console.log("🚀 MAL3ABAK BACKEND - ULTRA SECURE EDITION");
+    console.log(`📍 Server: http://localhost:${PORT}`);
+    console.log(`🌍 Environment: ${NODE_ENV}`);
+    console.log(`💻 CPU Cores: ${os.cpus().length}`);
+    console.log(`🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED`);
+    console.log("=".repeat(60) + "
+");
+  });
+
+  serverInstance.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`❌ Port ${PORT} is already in use`);
+      process.exit(1);
+    } else {
+      console.error("❌ Server error:", error);
+    }
+  });
+};
+
+startServer();
 
 // ===============================
 // 🧠 Memory Monitor
 // ===============================
-setInterval(() => {
+let memoryWarningCount = 0;
+
+const memoryMonitor = setInterval(() => {
   const used = process.memoryUsage();
-  if (used.heapTotal && used.heapUsed / used.heapTotal > 0.9) {
+  const heapUsedPercent = (used.heapUsed / used.heapTotal) * 100;
+  
+  if (heapUsedPercent > 90) {
+    memoryWarningCount++;
     console.warn("⚠️ HIGH MEMORY USAGE:", {
       heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
       heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+      percentage: `${heapUsedPercent.toFixed(2)}%`,
+      warningCount: memoryWarningCount,
     });
+
+    if (memoryWarningCount > 10 && global.gc) {
+      console.log("🧹 Running garbage collection...");
+      global.gc();
+      memoryWarningCount = 0;
+    }
+  } else {
+    memoryWarningCount = 0;
   }
 }, 60000);
+
+// ===============================
+// 🛑 Graceful Shutdown
+// ===============================
+const gracefulShutdown = (signal) => {
+  console.log(`
+⚠️ ${signal} received. Starting graceful shutdown...`);
+  
+  clearInterval(memoryMonitor);
+  
+  serverInstance.close(() => {
+    console.log("✅ HTTP server closed");
+    
+    mongoose.connection.close(false, () => {
+      console.log("✅ MongoDB connection closed");
+      
+      io.close(() => {
+        console.log("✅ Socket.IO connections closed");
+        console.log("👋 Server shutdown complete");
+        process.exit(0);
+      });
+    });
+  });
+
+  // Force shutdown after 30 seconds
+  setTimeout(() => {
+    console.error("❌ Forcing shutdown after timeout");
+    process.exit(1);
+  }, 30000);
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  gracefulShutdown("UNCAUGHT_EXCEPTION");
+});
 
 module.exports = server;
