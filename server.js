@@ -1,3 +1,4 @@
+
 /**
  * 🚀 ULTRA-SECURE & LIGHTNING-FAST Server - Enterprise Grade
  *
@@ -37,7 +38,9 @@ const { Server } = require("socket.io");
 const os = require("os");
 const errorHandler = require("./middlewares/errorHandler");
 const path = require("path");
+
 dotenv.config();
+
 // ===============================
 // 🔧 Environment Configuration
 // ===============================
@@ -60,6 +63,7 @@ if (!MONGO_URI) {
 // ===============================
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
@@ -70,7 +74,6 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6,
   transports: ["websocket", "polling"],
 });
-
 // ===============================
 // 🛡️ Security Middlewares
 // ===============================
