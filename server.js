@@ -54,9 +54,9 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 if (!API_KEY) {
   console.warn("⚠️ FOOTBALL_API_KEY missing in .env");
 }
+
 if (!MONGO_URI) {
   console.error("❌ MONGO_URI is required!");
-  // If you want the server to continue without DB (not recommended), comment next line.
   process.exit(1);
 }
 
@@ -65,9 +65,12 @@ if (!MONGO_URI) {
 // ===============================
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : "*",
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",")
+      : "*",
     credentials: true,
   },
   pingTimeout: 60000,
@@ -75,8 +78,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6,
   transports: ["websocket", "polling"],
 });
-
-// ===============================
+ 
 // 🛡️ Security Middlewares
 // ===============================
 app.use(
