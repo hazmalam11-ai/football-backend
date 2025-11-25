@@ -38,7 +38,6 @@ const os = require("os");
 const errorHandler = require("./middlewares/errorHandler");
 const path = require("path");
 dotenv.config();
-const sitemap = require("./sitemap");
 // ===============================
 // 🔧 Environment Configuration
 // ===============================
