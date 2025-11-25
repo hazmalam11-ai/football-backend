@@ -399,17 +399,17 @@ const startServer = () => {
     console.log("
 " + "=".repeat(60));
     console.log("🚀 MAL3ABAK BACKEND - ULTRA SECURE EDITION");
-    console.log(`📍 Server: http://localhost:${PORT}`);
-    console.log(`🌍 Environment: ${NODE_ENV}`);
-    console.log(`💻 CPU Cores: ${os.cpus().length}`);
-    console.log(`🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED`);
+    console.log("📍 Server: http://localhost:" + PORT);
+    console.log("🌍 Environment: " + NODE_ENV);
+    console.log("💻 CPU Cores: " + os.cpus().length);
+    console.log("🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED");
     console.log("=".repeat(60) + "
 ");
   });
 
   serverInstance.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
-      console.error(`❌ Port ${PORT} is already in use`);
+      console.error("❌ Port " + PORT + " is already in use");
       process.exit(1);
     } else {
       console.error("❌ Server error:", error);
