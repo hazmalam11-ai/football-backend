@@ -393,8 +393,6 @@ setTimeout(startBackgroundServices, 5000);
 // 🚀 Start Server
 // ===============================
 let serverInstance;
-
-
 const startServer = () => {
   serverInstance = server.listen(PORT, () => {
     console.log("\n" + "=".repeat(60));
