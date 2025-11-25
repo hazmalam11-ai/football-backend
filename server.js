@@ -206,7 +206,7 @@ const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
-const sitemap = require('./routes/sitemap');
+const sitemapRoutes = require("./routes/sitemap");
 // ===============================
 // 🧭 Route Mounting
 // ===============================
