@@ -1,26 +1,7 @@
 
+```javascript
 /**
  * 🚀 ULTRA-SECURE & LIGHTNING-FAST Server - Enterprise Grade
- *
- * 🛡️ SECURITY FEATURES:
- * - Advanced DDoS Protection & Rate Limiting
- * - SQL/NoSQL Injection Prevention
- * - XSS & CSRF Protection
- * - HTTP Parameter Pollution Prevention
- * - Security Headers (Helmet Pro)
- * - Request Sanitization & Validation
- * - IP Whitelisting/Blacklisting
- * - Brute Force Protection
- * - JWT Security Best Practices
- *
- * ⚡ PERFORMANCE FEATURES:
- * - Redis Caching Layer (placeholder)
- * - Response Compression (Brotli/Gzip)
- * - Connection Pooling
- * - Graceful Shutdown
- * - Memory Leak Prevention
- * - Query Optimization
- * - CDN-Ready Static Assets
  */
 
 const express = require("express");
@@ -36,36 +17,23 @@ const compression = require("compression");
 const http = require("http");
 const { Server } = require("socket.io");
 const os = require("os");
-const errorHandler = require("./middlewares/errorHandler");
-<<<<<<< Updated upstream
 const path = require("path");
+const errorHandler = require("./middlewares/errorHandler");
 
-=======
->>>>>>> Stashed changes
 dotenv.config();
 
-// ===============================
-// 🔧 Environment Configuration
-// ===============================
 const PORT = process.env.PORT || 5050;
 const MONGO_URI = process.env.MONGO_URI;
 const API_KEY = process.env.FOOTBALL_API_KEY;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-// ===============================
-// ✅ Env Validation
-// ===============================
 if (!API_KEY) console.warn("⚠️ FOOTBALL_API_KEY missing in .env");
 if (!MONGO_URI) {
   console.error("❌ MONGO_URI is required!");
   process.exit(1);
 }
 
-// ===============================
-// ⚙️ Express / HTTP / Socket.io
-// ===============================
 const app = express();
-app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps")));
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -78,9 +46,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6,
   transports: ["websocket", "polling"],
 });
-// ===============================
-// 🛡️ Security Middlewares
-// ===============================
+
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -107,23 +73,12 @@ app.use(
 
 app.use(mongoSanitize());
 app.use(hpp({ whitelist: ["page", "limit", "sort", "fields", "filter"] }));
-app.use(
-  compression({
-    level: 6,
-    threshold: 1024,
-  })
-);
+app.use(compression({ level: 6, threshold: 1024 }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// ===============================
-// 📁 Static Files (IMPORTANT!)
-// ===============================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
-// ===============================
-// 📌 STATIC SITEMAPS FOLDER
-// ===============================
 app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps"), {
   setHeaders: (res) => {
     res.setHeader("Content-Type", "application/xml");
@@ -132,8 +87,7 @@ app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps"), {
     res.setHeader("Expires", "0");
   }
 }));
-// 🌍 CORS Configuration
-// ===============================
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",")
   : ["http://localhost:3000", "https://mal3abak.com"];
@@ -150,9 +104,6 @@ app.use(
   })
 );
 
-// ===============================
-// 🧱 Rate Limiting
-// ===============================
 const createRateLimiter = (windowMs, max, message) =>
   rateLimit({
     windowMs,
@@ -166,15 +117,9 @@ app.use(createRateLimiter(10 * 60 * 1000, 600, "Global rate limit exceeded"));
 const authLimiter = createRateLimiter(15 * 60 * 1000, 10, "Too many login attempts");
 const apiLimiter = createRateLimiter(1 * 60 * 1000, 100, "API rate limit exceeded");
 
-// ===============================
-// 📜 Logging
-// ===============================
 app.use(morgan(NODE_ENV === "production" ? "combined" : "dev"));
 app.set("trust proxy", 1);
 
-// ===============================
-// 💾 MongoDB Connection
-// ===============================
 const mongoOptions = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -190,17 +135,11 @@ mongoose
     process.exit(1);
   });
 
-// ===============================
-// 🔌 Attach io to Requests
-// ===============================
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// ===============================
-// 🧩 Routes Import
-// ===============================
 const authRoutes = require("./routes/auth");
 const teamRoutes = require("./routes/teams");
 const playerRoutes = require("./routes/players");
@@ -219,15 +158,12 @@ const fantasyTeamRoutes = require("./routes/fantasyTeams");
 const fantasyLeaderboardRoutes = require("./routes/fantasyLeaderboard");
 const fantasyGameweekRoutes = require("./routes/fantasygameweeks");
 const fantasyScoringRoutes = require("./routes/fantasyScoring");
-const appLeaderboardRoutes = require("./routes/fantasyPoints");
 const fantasyPointsRoutes = require("./routes/fantasyPoints");
 const fantasyMiniLeaguesRoutes = require("./routes/fantasyMiniLeagues");
 const matchDataRoutes = require("./routes/matchData");
 const insightsRoutes = require("./routes/insights");
 const sitemapRoutes = require("./routes/sitemap");
-// ===============================
-// 🧭 Route Mounting
-// ===============================
+
 app.use("/auth", authLimiter, authRoutes);
 app.use("/teams", apiLimiter, teamRoutes);
 app.use("/api/players", apiLimiter, playerRoutes);
@@ -251,9 +187,7 @@ app.use("/fantasy/scoring", fantasyScoringRoutes);
 app.use("/fantasy/points", fantasyPointsRoutes);
 app.use("/fantasy/mini-leagues", fantasyMiniLeaguesRoutes);
 app.use("/", sitemapRoutes);
-// ===============================
-// 💬 Socket.io Events
-// ===============================
+
 io.on("connection", (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
@@ -275,9 +209,6 @@ global.sendLiveScoreUpdate = (id, data) => {
   io.to(`match-${id}`).emit("score-update", { matchId: id, ...data, ts: Date.now() });
 };
 
-// ===============================
-// 🧪 Health & Metrics
-// ===============================
 app.get("/", (req, res) => {
   res.json({
     message: "⚽ Mal3abak Backend - Ultra Secure Edition",
@@ -297,18 +228,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ===============================
-// 🚫 404 + Error Handling
-// ===============================
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
 
 app.use(errorHandler);
 
-// ===============================
-// 🔁 Background Jobs
-// ===============================
 try {
   require("./services/autoSync");
   require("./services/autoGameweekService").start();
@@ -317,9 +242,6 @@ try {
   console.warn("⚠️ Background services not available:", err.message);
 }
 
-// ===============================
-// 🚀 Start Server
-// ===============================
 server.listen(PORT, () => {
   console.log("\n" + "=".repeat(60));
   console.log("🚀 MAL3ABAK BACKEND - ULTRA SECURE EDITION");
@@ -330,9 +252,6 @@ server.listen(PORT, () => {
   console.log("=".repeat(60) + "\n");
 });
 
-// ===============================
-// 🧠 Memory Monitor
-// ===============================
 setInterval(() => {
   const used = process.memoryUsage();
   if (used.heapUsed / used.heapTotal > 0.9) {
@@ -344,9 +263,3 @@ setInterval(() => {
 }, 60000);
 
 module.exports = server;
-
-// ===============================
-// STATIC SITEMAPS FOLDER
-// ===============================
-app.use("/sitemaps", express.static(path.join(__dirname, "sitemaps")));
-
