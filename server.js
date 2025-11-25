@@ -251,7 +251,7 @@ const routesConfig = [
   { path: "/fantasy/scoring", file: "./routes/fantasyScoring" },
   { path: "/fantasy/points", file: "./routes/fantasyPoints" },
   { path: "/fantasy/mini-leagues", file: "./routes/fantasyMiniLeagues" },
-  { path: "/", file: "./routes/sitemap" },
+{ path: "/sitemaps", file: "./routes/sitemap" },
 ];
 
 routesConfig.forEach(({ path, file, limiter }) => {
