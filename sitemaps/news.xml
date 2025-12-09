@@ -1,8 +1,63 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://mal3abak.com/news</loc>
-    <changefreq>hourly</changefreq>
-    <priority>0.9</priority>
-  </url>
-</urlset>
+const express = require("express");
+const router = express.Router();
+const News = require("../models/News"); // عدّل المسار حسب مشروعك
+
+router.get("/sitemap-news.xml", async (req, res) => {
+  try {
+    const news = await News.find().sort({ createdAt: -1 }).limit(1000);
+
+    let items = news
+      .map((item) => {
+        const url = `https://mal3abak.com/news/${item._id}`;
+        const published = item.publishedAt || item.createdAt;
+        const updated = item.updatedAt || published;
+
+        return `
+        <url>
+          <loc>${url}</loc>
+          <lastmod>${new Date(updated).toISOString()}</lastmod>
+          <news:news>
+            <news:publication>
+              <news:name>Mal3abak</news:name>
+              <news:language>ar</news:language>
+            </news:publication>
+            <news:publication_date>${new Date(published).toISOString()}</news:publication_date>
+            <news:title>${escapeXml(item.title)}</news:title>
+          </news:news>
+        </url>
+      `;
+      })
+      .join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+            xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+      ${items}
+    </urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating sitemap");
+  }
+});
+
+function escapeXml(unsafe) {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "&":
+        return "&amp;";
+      case "'":
+        return "&apos;";
+      case '"":
+        return "&quot;";
+    }
+  });
+}
+
+module.exports = router;
