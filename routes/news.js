@@ -463,16 +463,8 @@ router.get("/", async (req, res, next) => {
     }
 
     // New format with pagination
-    res.json({
-      success: true,
-      data: newsWithMeta,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
+    res.json(newsWithMeta);
+    
   } catch (err) {
     next(err);
   }
