@@ -8,7 +8,7 @@ const News = require("../models/news");
 const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
-// ⭐ استدعاء Google Indexing
+// ⭐ استدعاء Google Indexing بشكل صحيح
 const requestIndexing = require("../google/index");
 console.log("🔥 Google Indexing Loaded");
 
