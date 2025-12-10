@@ -2,9 +2,10 @@ const { GoogleAuth } = require("google-auth-library");
 
 async function indexURL(url) {
   try {
+    // التأكد أن الأرشفة مفعلة
     if (process.env.ENABLE_GOOGLE_INDEXING !== "true") {
       console.log("Indexing disabled");
-      return;
+      return false;
     }
 
     const auth = new GoogleAuth({
@@ -24,8 +25,11 @@ async function indexURL(url) {
     });
 
     console.log("Indexed:", url, res.data);
+    return true;
+
   } catch (err) {
     console.error("Indexing error:", err.response?.data || err.message);
+    return false;
   }
 }
 
