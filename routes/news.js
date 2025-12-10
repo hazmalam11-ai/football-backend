@@ -251,8 +251,7 @@ async function logIndexing(newsId, url, status, error = null, metadata = {}) {
       ...metadata
     };
     
-    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "
-");
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "\n");
   } catch (err) {
     console.error("❌ Logging error:", err.message);
   }
