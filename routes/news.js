@@ -414,11 +414,10 @@ router.post(
     }
   }
 );
-
-// 📌 كل الأخبار - Enhanced with pagination
+// 📌 كل الأخبار - Enhanced with pagination + Backward Compatible
 router.get("/", async (req, res, next) => {
   try {
-    const { q, category, featured, page = 1, limit = 20, sort = "-createdAt" } = req.query;
+    const { q, category, featured, page = 1, limit = 20, sort = "-createdAt", legacy } = req.query;
     const filter = {};
     
     if (q) filter.$or = [
@@ -457,6 +456,13 @@ router.get("/", async (req, res, next) => {
       })
     );
 
+    // 🔄 Backward Compatibility - إذا Frontend مش جاهز للـ new format
+    if (legacy === "true" || req.headers['x-api-version'] === '1') {
+      // ارجع Array مباشرة (القديم)
+      return res.json(newsWithMeta);
+    }
+
+    // New format with pagination
     res.json({
       success: true,
       data: newsWithMeta,
