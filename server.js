@@ -22,9 +22,16 @@
  * - CDN-Ready Static Assets
  */
 
+// Load .env from absolute path
+require("dotenv").config({
+  path: "/root/football-backend/.env"
+});
+
+// Debug to confirm ENV is loaded
+console.log("🔥 ENV Loaded ENABLE_GOOGLE_INDEXING:", process.env.ENABLE_GOOGLE_INDEXING);
+
 const express = require("express");
 const mongoose = require("mongoose");
-const dotenv = require("dotenv");
 const morgan = require("morgan");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -38,8 +45,6 @@ const os = require("os");
 const path = require("path");
 const fs = require("fs");
 const errorHandler = require("./middlewares/errorHandler");
-
-dotenv.config();
 
 // Increase max listeners to prevent memory leak warnings
 require("events").EventEmitter.defaultMaxListeners = 20;
