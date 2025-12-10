@@ -9,7 +9,15 @@ const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // ⭐ استدعاء Google Indexing
-const indexURL = require("../google/index");
+let indexURL;
+try {
+  indexURL = require("../google/index");
+} catch (err) {
+  console.warn("⚠️ Google Indexing not available:", err.message);
+  indexURL = async () => {
+    console.log("⚠️ Google Indexing disabled");
+  };
+}
 
 const router = express.Router();
 
@@ -44,9 +52,9 @@ function parseBoolean(value) {
 function generateSlug(title) {
   return title
     .toLowerCase()
-    .replace(/[^ء-يa-z0-9s-]/g, "")
+    .replace(/[^ء-يa-z0-9\s-]/g, "")
     .trim()
-    .replace(/s+/g, "-")
+    .replace(/\s+/g, "-")
     .substring(0, 100);
 }
 
@@ -106,7 +114,6 @@ async function generateOGImage(title, newsId) {
     const maxWidth = 1000;
     const words = title.split(" ");
     let line = "";
-    let y = height / 2 - 30;
     const lines = [];
     
     words.forEach(word => {
@@ -162,22 +169,25 @@ async function retryWithBackoff(fn, maxRetries = 3, delay = 1000) {
 
 // 📊 تسجيل محاولات الأرشفة
 async function logIndexing(newsId, url, status, error = null) {
-  const logDir = path.join(__dirname, "../logs");
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+  try {
+    const logDir = path.join(__dirname, "../logs");
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    const logPath = path.join(logDir, "indexing.log");
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      newsId,
+      url,
+      status,
+      error
+    };
+    
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "\n");
+  } catch (err) {
+    console.error("❌ Logging error:", err.message);
   }
-  
-  const logPath = path.join(logDir, "indexing.log");
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    newsId,
-    url,
-    status,
-    error
-  };
-  
-  fs.appendFileSync(logPath, JSON.stringify(logEntry) + "
-");
 }
 
 // 📍 Ping Sitemap لـ Google & Bing
@@ -497,9 +507,10 @@ router.put(
         updateData.metaDescription = generateMetaDescription(content);
       }
       if (title || content) {
+        const currentNews = await News.findById(req.params.id);
         updateData.keywords = extractKeywords(
-          title || (await News.findById(req.params.id)).title,
-          content || (await News.findById(req.params.id)).content
+          title || currentNews.title,
+          content || currentNews.content
         );
       }
       if (category) updateData.category = category;
