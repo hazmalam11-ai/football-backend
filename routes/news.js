@@ -9,17 +9,8 @@ const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // ⭐ استدعاء Google Indexing
-let requestIndexing;
-try {
-  const indexModule = require("../google/index");
-  requestIndexing = indexModule.requestIndexing || indexModule.indexURL || indexModule;
-} catch (err) {
-  console.warn("⚠️ Google Indexing not available:", err.message);
-  requestIndexing = async () => {
-    console.log("⚠️ Google Indexing disabled");
-    return false;
-  };
-}
+const requestIndexing = require("../google/index");
+console.log("🔥 Google Indexing Loaded");
 
 const router = express.Router();
 
