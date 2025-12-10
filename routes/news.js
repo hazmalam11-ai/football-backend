@@ -3,14 +3,13 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
-const { createCanvas, loadImage, registerFont } = require("canvas");
+const { createCanvas } = require("canvas");
 const News = require("../models/news");
 const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // ⭐ استدعاء Google Indexing
-const { indexURL, requestIndexing } = require("../google/index");
-const { generateSitemap, pingSitemap } = require("../utils/sitemap");
+const indexURL = require("../google/index");
 
 const router = express.Router();
 
@@ -45,7 +44,7 @@ function parseBoolean(value) {
 function generateSlug(title) {
   return title
     .toLowerCase()
-    .replace(/[^ء-يa-z0-9s-]/g, "") // السماح بالعربية والإنجليزية
+    .replace(/[^ء-يa-z0-9s-]/g, "")
     .trim()
     .replace(/s+/g, "-")
     .substring(0, 100);
@@ -53,7 +52,7 @@ function generateSlug(title) {
 
 // 🔹 استخراج Keywords من العنوان والمحتوى
 function extractKeywords(title, content) {
-  const stopWords = ["في", "من", "إلى", "على", "the", "a", "an", "is", "to", "of"];
+  const stopWords = ["في", "من", "إلى", "على", "عن", "مع", "the", "a", "an", "is", "to", "of", "and", "for"];
   const text = `${title} ${content.replace(/<[^>]*>/g, "")}`;
   const words = text
     .toLowerCase()
@@ -91,9 +90,15 @@ async function generateOGImage(title, newsId) {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
+    // شعار أو علامة مائية
+    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.font = "bold 40px Arial";
+    ctx.textAlign = "right";
+    ctx.fillText("Mal3abak", width - 50, height - 50);
+
     // إضافة نص العنوان
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 60px Arial";
+    ctx.font = "bold 56px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     
@@ -101,20 +106,27 @@ async function generateOGImage(title, newsId) {
     const maxWidth = 1000;
     const words = title.split(" ");
     let line = "";
-    let y = height / 2 - 50;
+    let y = height / 2 - 30;
+    const lines = [];
     
     words.forEach(word => {
       const testLine = line + word + " ";
       const metrics = ctx.measureText(testLine);
       if (metrics.width > maxWidth && line !== "") {
-        ctx.fillText(line, width / 2, y);
+        lines.push(line.trim());
         line = word + " ";
-        y += 70;
       } else {
         line = testLine;
       }
     });
-    ctx.fillText(line, width / 2, y);
+    if (line) lines.push(line.trim());
+    
+    // رسم الأسطر
+    const lineHeight = 70;
+    const startY = height / 2 - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((l, i) => {
+      ctx.fillText(l, width / 2, startY + i * lineHeight);
+    });
 
     // حفظ الصورة
     const ogDir = path.join(__dirname, "../uploads/news/og");
@@ -129,7 +141,7 @@ async function generateOGImage(title, newsId) {
     
     return `/uploads/news/og/${filename}`;
   } catch (err) {
-    console.error("Error generating OG image:", err);
+    console.error("❌ Error generating OG image:", err);
     return null;
   }
 }
@@ -142,7 +154,7 @@ async function retryWithBackoff(fn, maxRetries = 3, delay = 1000) {
     } catch (err) {
       if (i === maxRetries - 1) throw err;
       const waitTime = delay * Math.pow(2, i);
-      console.log(`Retry ${i + 1}/${maxRetries} after ${waitTime}ms`);
+      console.log(`⏳ Retry ${i + 1}/${maxRetries} after ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
@@ -150,7 +162,12 @@ async function retryWithBackoff(fn, maxRetries = 3, delay = 1000) {
 
 // 📊 تسجيل محاولات الأرشفة
 async function logIndexing(newsId, url, status, error = null) {
-  const logPath = path.join(__dirname, "../logs/indexing.log");
+  const logDir = path.join(__dirname, "../logs");
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  
+  const logPath = path.join(logDir, "indexing.log");
   const logEntry = {
     timestamp: new Date().toISOString(),
     newsId,
@@ -161,6 +178,27 @@ async function logIndexing(newsId, url, status, error = null) {
   
   fs.appendFileSync(logPath, JSON.stringify(logEntry) + "
 ");
+}
+
+// 📍 Ping Sitemap لـ Google & Bing
+async function notifySitemap() {
+  if (process.env.ENABLE_SITEMAP_PING !== "true") return;
+  
+  const sitemapUrl = encodeURIComponent("https://mal3abak.com/sitemap/news.xml");
+  
+  const endpoints = [
+    `https://www.google.com/ping?sitemap=${sitemapUrl}`,
+    `https://www.bing.com/indexnow?url=https://mal3abak.com/sitemap/news.xml&key=${process.env.INDEXNOW_KEY || ""}`
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      await axios.get(endpoint, { timeout: 5000 });
+      console.log(`✅ Sitemap pinged: ${endpoint.split("?")[0]}`);
+    } catch (err) {
+      console.log(`⚠️ Sitemap ping failed: ${err.message}`);
+    }
+  }
 }
 
 // ➕ إنشاء خبر (يدعم رفع صورة)
@@ -177,7 +215,7 @@ router.post(
         throw new Error("title and content are required");
       }
 
-      // توليد Slug و SEO Data
+      // 🔹 توليد SEO Data
       const slug = generateSlug(title);
       const metaDescription = generateMetaDescription(content);
       const keywords = extractKeywords(title, content);
@@ -220,13 +258,14 @@ router.post(
         retryWithBackoff(async () => {
           await indexURL(fullUrl);
           await logIndexing(news._id, fullUrl, "success");
+          console.log(`✅ Indexed: ${fullUrl}`);
         }, 3, 1000).catch(err => {
           logIndexing(news._id, fullUrl, "failed", err.message);
+          console.error(`❌ Indexing failed: ${err.message}`);
         });
 
         // 📍 Ping Sitemap
-        generateSitemap();
-        pingSitemap();
+        setTimeout(() => notifySitemap(), 2000);
       }
 
       res.status(201).json({ message: "News created", news });
@@ -239,8 +278,13 @@ router.post(
 // 📌 كل الأخبار
 router.get("/", async (req, res, next) => {
   try {
-    const { q } = req.query;
-    const filter = q ? { title: { $regex: q, $options: "i" } } : {};
+    const { q, category, featured } = req.query;
+    const filter = {};
+    
+    if (q) filter.title = { $regex: q, $options: "i" };
+    if (category) filter.category = category;
+    if (featured === "true") filter.isFeatured = true;
+    
     const news = await News.find(filter)
       .populate("author", "username")
       .sort({ createdAt: -1 });
@@ -267,7 +311,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// 🌐 عرض HTML للخبر - Super SEO Preview Page
+// 🌐 Super SEO Preview Page
 router.get("/:id/preview", async (req, res, next) => {
   try {
     const item = await News.findById(req.params.id).populate("author", "username");
@@ -284,7 +328,7 @@ router.get("/:id/preview", async (req, res, next) => {
     const description = item.metaDescription || generateMetaDescription(item.content);
     const keywords = item.keywords || extractKeywords(item.title, item.content);
 
-    // 📋 JSON-LD Schema
+    // 📋 JSON-LD FULL NEWS SCHEMA
     const jsonLD = {
       "@context": "https://schema.org",
       "@type": "NewsArticle",
@@ -300,20 +344,25 @@ router.get("/:id/preview", async (req, res, next) => {
       "dateModified": item.updatedAt,
       "author": {
         "@type": "Person",
-        "name": item.author?.username || "Mal3abak Team"
+        "name": item.author?.username || "Mal3abak Team",
+        "url": `${baseUrl}/user/${item.author?._id || ""}`
       },
       "publisher": {
         "@type": "Organization",
         "name": "Mal3abak",
         "logo": {
           "@type": "ImageObject",
-          "url": `${baseUrl}/logo.png`
+          "url": `${baseUrl}/logo.png`,
+          "width": 200,
+          "height": 60
         }
       },
       "mainEntityOfPage": {
         "@type": "WebPage",
         "@id": newsUrl
-      }
+      },
+      "articleSection": item.category || "Sports",
+      "keywords": keywords
     };
 
     const html = `
@@ -328,33 +377,71 @@ router.get("/:id/preview", async (req, res, next) => {
     <meta name="description" content="${description}">
     <meta name="keywords" content="${keywords}">
     <link rel="canonical" href="${newsUrl}">
+    <meta name="robots" content="index, follow">
     
     <!-- Open Graph -->
     <meta property="og:type" content="article">
     <meta property="og:title" content="${item.title}">
     <meta property="og:description" content="${description}">
     <meta property="og:image" content="${imageUrl}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:url" content="${newsUrl}">
     <meta property="og:site_name" content="Mal3abak">
     <meta property="article:published_time" content="${item.createdAt}">
     <meta property="article:modified_time" content="${item.updatedAt}">
     <meta property="article:author" content="${item.author?.username || 'Mal3abak'}">
+    <meta property="article:section" content="${item.category || 'Sports'}">
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${item.title}">
     <meta name="twitter:description" content="${description}">
     <meta name="twitter:image" content="${imageUrl}">
+    <meta name="twitter:site" content="@mal3abak">
     
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
-    ${JSON.stringify(jsonLD, null, 2)}
+${JSON.stringify(jsonLD, null, 2)}
     </script>
     
     <meta http-equiv="refresh" content="3;url=mal3abak://news/${item._id}">
+    
+    <style>
+        body {
+            font-family: 'Cairo', Arial, sans-serif;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        .loader {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
+<body>
     <h1>${item.title}</h1>
+    <div class="loader"></div>
     <p>جارٍ التحويل إلى التطبيق...</p>
 </body>
 </html>
@@ -399,16 +486,23 @@ router.put(
   async (req, res, next) => {
     try {
       const { title, content, category, isFeatured } = req.body;
-      const updateData = { title, content, category };
-
-      // تحديث SEO Data
+      const updateData = {};
+      
       if (title) {
+        updateData.title = title;
         updateData.slug = generateSlug(title);
-        updateData.keywords = extractKeywords(title, content || "");
       }
       if (content) {
+        updateData.content = content;
         updateData.metaDescription = generateMetaDescription(content);
       }
+      if (title || content) {
+        updateData.keywords = extractKeywords(
+          title || (await News.findById(req.params.id)).title,
+          content || (await News.findById(req.params.id)).content
+        );
+      }
+      if (category) updateData.category = category;
 
       if (typeof isFeatured !== "undefined") {
         const willBeFeatured = parseBoolean(isFeatured);
@@ -418,11 +512,13 @@ router.put(
             { $set: { isFeatured: false } }
           );
           
-          // أرشفة عند تعيين Featured
+          // ⭐ أرشفة عند تعيين Featured
           if (process.env.ENABLE_GOOGLE_INDEXING === "true") {
             const news = await News.findById(req.params.id);
             const fullUrl = `https://mal3abak.com/news/${req.params.id}/${news.slug}`;
-            retryWithBackoff(() => indexURL(fullUrl)).catch(console.error);
+            retryWithBackoff(() => indexURL(fullUrl))
+              .then(() => console.log(`✅ Featured news indexed: ${fullUrl}`))
+              .catch(console.error);
           }
         }
         updateData.isFeatured = willBeFeatured;
@@ -448,13 +544,13 @@ router.put(
         const fullUrl = `https://mal3abak.com/news/${updated._id}/${updated.slug}`;
         retryWithBackoff(async () => {
           await indexURL(fullUrl);
-          await logIndexing(updated._id, fullUrl, "success");
-        }).catch(err => {
-          logIndexing(updated._id, fullUrl, "failed", err.message);
+          await logIndexing(updated._id, fullUrl, "success (update)");
+          console.log(`✅ Updated news indexed: ${fullUrl}`);
+        }, 3, 1000).catch(err => {
+          logIndexing(updated._id, fullUrl, "failed (update)", err.message);
         });
         
-        generateSitemap();
-        pingSitemap();
+        setTimeout(() => notifySitemap(), 2000);
       }
 
       res.json({ message: "News updated", news: updated });
@@ -473,9 +569,8 @@ router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) =>
       throw new Error("News not found");
     }
     
-    // تحديث Sitemap بعد الحذف
-    generateSitemap();
-    pingSitemap();
+    // 📍 إعادة ping للـ sitemap بعد الحذف
+    setTimeout(() => notifySitemap(), 2000);
     
     res.json({ message: "News deleted" });
   } catch (err) {
