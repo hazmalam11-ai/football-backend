@@ -31,7 +31,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (allowedTypes.includes(file.mimetype)) {
@@ -53,7 +53,6 @@ function parseBoolean(value) {
   return false;
 }
 
-// 🔹 توليد Slug من العنوان - مع حماية كاملة
 function generateSlug(title) {
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     console.warn('⚠️ generateSlug received invalid title:', title);
@@ -69,7 +68,6 @@ function generateSlug(title) {
     .substring(0, 100);
 }
 
-// 🔹 استخراج Keywords من العنوان والمحتوى - Enhanced
 function extractKeywords(title, content) {
   const stopWords = [
     "في", "من", "إلى", "على", "عن", "مع", "هذا", "هذه", "ذلك", "التي", "الذي",
@@ -94,7 +92,6 @@ function extractKeywords(title, content) {
     .join(", ");
 }
 
-// 🔹 توليد Meta Description - Enhanced
 function generateMetaDescription(content, title = "") {
   const clean = content.replace(/<[^>]*>/g, "").trim();
   
@@ -102,7 +99,6 @@ function generateMetaDescription(content, title = "") {
     return clean;
   }
   
-  // Try to cut at sentence end
   const cutPoint = clean.substring(0, 152).lastIndexOf(".");
   if (cutPoint > 100) {
     return clean.substring(0, cutPoint + 1);
@@ -111,7 +107,6 @@ function generateMetaDescription(content, title = "") {
   return clean.substring(0, 152) + "...";
 }
 
-// 🎨 توليد OG Image تلقائيًا - Enhanced with Better Design
 async function generateOGImage(title, newsId, category = "Sports") {
   if (!process.env.ENABLE_AUTO_OG_IMAGE || process.env.ENABLE_AUTO_OG_IMAGE !== "true") {
     return null;
@@ -123,7 +118,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    // خلفية متدرجة حسب الفئة
     const gradients = {
       Football: ["#1e3c72", "#2a5298"],
       Basketball: ["#ff6b6b", "#ee5a6f"],
@@ -139,7 +133,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // Pattern overlay
     ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
     for (let i = 0; i < width; i += 50) {
       for (let j = 0; j < height; j += 50) {
@@ -147,26 +140,22 @@ async function generateOGImage(title, newsId, category = "Sports") {
       }
     }
 
-    // شعار الموقع
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.font = "bold 48px Arial";
     ctx.textAlign = "left";
     ctx.fillText("⚽ Mal3abak", 50, 70);
 
-    // Category badge
     ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctx.fillRect(50, 100, 150, 40);
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 24px Arial";
     ctx.fillText(category, 70, 127);
 
-    // إضافة نص العنوان
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 52px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     
-    // تقسيم النص لعدة أسطر
     const maxWidth = 1000;
     const words = title.split(" ");
     let line = "";
@@ -184,7 +173,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
     });
     if (line) lines.push(line.trim());
     
-    // رسم الأسطر مع shadow
     ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 2;
@@ -198,7 +186,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
     
     ctx.shadowColor = "transparent";
 
-    // Footer with date
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     ctx.font = "20px Arial";
     ctx.textAlign = "right";
@@ -209,7 +196,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
     });
     ctx.fillText(date, width - 50, height - 40);
 
-    // حفظ الصورة
     const ogDir = path.join(__dirname, "../uploads/news/og");
     if (!fs.existsSync(ogDir)) {
       fs.mkdirSync(ogDir, { recursive: true });
@@ -230,7 +216,6 @@ async function generateOGImage(title, newsId, category = "Sports") {
   }
 }
 
-// 🔄 Retry Logic مع Exponential Backoff - Enhanced
 async function retryWithBackoff(fn, maxRetries = 3, delay = 1000, context = "operation") {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -247,7 +232,6 @@ async function retryWithBackoff(fn, maxRetries = 3, delay = 1000, context = "ope
   }
 }
 
-// 📊 تسجيل محاولات الأرشفة - Enhanced
 async function logIndexing(newsId, url, status, error = null, metadata = {}) {
   if (process.env.ENABLE_INDEXING_LOGS !== "true") return;
   
@@ -274,7 +258,6 @@ async function logIndexing(newsId, url, status, error = null, metadata = {}) {
   }
 }
 
-// 📍 Ping Sitemap لـ Google & Bing - Enhanced
 async function notifySitemap() {
   if (process.env.ENABLE_SITEMAP_PING !== "true") return;
   
@@ -302,13 +285,12 @@ async function notifySitemap() {
   }
 }
 
-// 🌐 Generate Full URL
 function generateNewsUrl(newsId, slug) {
   const baseUrl = process.env.BASE_URL || "https://mal3abak.com";
   return `${baseUrl}/news/${newsId}/${slug || ''}`;
 }
 
-// ➕ إنشاء خبر (يدعم رفع صورة)
+// ➕ إنشاء خبر
 router.post(
   "/",
   requireAuth,
@@ -333,7 +315,6 @@ router.post(
         throw new Error("content must be at least 10 characters");
       }
 
-      // 🔹 توليد SEO Data
       const slug = generateSlug(title);
       const metaDescription = generateMetaDescription(content, title);
       const keywords = extractKeywords(title, content);
@@ -358,7 +339,6 @@ router.post(
         indexingStatus: "pending"
       });
 
-      // 🎨 توليد OG Image إذا لم يتم رفع صورة
       if (!imageUrl) {
         const ogImagePath = await generateOGImage(title, news._id, category);
         if (ogImagePath) {
@@ -370,7 +350,6 @@ router.post(
         await news.save();
       }
 
-      // ⭐ أرشفة تلقائية بعد إنشاء الخبر مع Retry
       if (process.env.ENABLE_GOOGLE_INDEXING === "true") {
         const fullUrl = generateNewsUrl(news._id, slug);
         
@@ -396,7 +375,6 @@ router.post(
           console.error(`❌ Indexing failed: ${err.message}`);
         });
 
-        // 📍 Ping Sitemap
         setTimeout(() => notifySitemap(), 2000);
       }
 
@@ -413,10 +391,11 @@ router.post(
     }
   }
 );
-// 📌 كل الأخبار - Enhanced with pagination + Backward Compatible
+
+// 📌 كل الأخبار - Backward Compatible
 router.get("/", async (req, res, next) => {
   try {
-    const { q, category, featured, page = 1, limit = 20, sort = "-createdAt", legacy } = req.query;
+    const { q, category, featured, page = 1, limit = 20, sort = "-createdAt" } = req.query;
     const filter = {};
     
     if (q) filter.$or = [
@@ -455,13 +434,6 @@ router.get("/", async (req, res, next) => {
       })
     );
 
-    // 🔄 Backward Compatibility - إذا Frontend مش جاهز للـ new format
-    if (legacy === "true" || req.headers['x-api-version'] === '1') {
-      // ارجع Array مباشرة (القديم)
-      return res.json(newsWithMeta);
-    }
-
-    // New format with pagination
     res.json(newsWithMeta);
     
   } catch (err) {
@@ -469,7 +441,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// 🌐 Super SEO Preview Page - Enhanced
+// 🌐 Super SEO Preview Page
 router.get("/:id/preview", async (req, res, next) => {
   try {
     const item = await News.findById(req.params.id).populate("author", "username");
@@ -486,7 +458,6 @@ router.get("/:id/preview", async (req, res, next) => {
     const description = item.metaDescription || generateMetaDescription(item.content, item.title);
     const keywords = item.keywords || extractKeywords(item.title, item.content);
 
-    // 📋 JSON-LD FULL NEWS SCHEMA - Enhanced
     const jsonLD = {
       "@context": "https://schema.org",
       "@type": "NewsArticle",
@@ -534,66 +505,34 @@ router.get("/:id/preview", async (req, res, next) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Basic Meta -->
     <title>${item.title} | Mal3abak</title>
     <meta name="description" content="${description}">
     <meta name="keywords" content="${keywords}">
     <link rel="canonical" href="${newsUrl}">
     <meta name="robots" content="index, follow, max-image-preview:large">
-    <meta name="googlebot" content="index, follow">
     
-    <!-- Open Graph -->
     <meta property="og:type" content="article">
     <meta property="og:title" content="${item.title}">
     <meta property="og:description" content="${description}">
     <meta property="og:image" content="${imageUrl}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="${item.title}">
     <meta property="og:url" content="${newsUrl}">
-    <meta property="og:site_name" content="Mal3abak">
-    <meta property="og:locale" content="ar_AR">
-    <meta property="article:published_time" content="${item.createdAt}">
-    <meta property="article:modified_time" content="${item.updatedAt}">
-    <meta property="article:author" content="${item.author?.username || 'Mal3abak'}">
-    <meta property="article:section" content="${item.category || 'Sports'}">
     
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="${item.title}">
-    <meta name="twitter:description" content="${description}">
-    <meta name="twitter:image" content="${imageUrl}">
-    <meta name="twitter:image:alt" content="${item.title}">
-    <meta name="twitter:site" content="@mal3abak">
-    <meta name="twitter:creator" content="@mal3abak">
-    
-    <!-- Additional SEO -->
-    <meta name="theme-color" content="#667eea">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="alternate" type="application/rss+xml" title="Mal3abak RSS Feed" href="${baseUrl}/rss.xml">
-    
-    <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
 ${JSON.stringify(jsonLD, null, 2)}
     </script>
-    
-    <!-- Preconnect -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
     
     <meta http-equiv="refresh" content="3;url=mal3abak://news/${item._id}">
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+            font-family: Arial, sans-serif;
             padding: 20px;
             text-align: center;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
@@ -603,13 +542,8 @@ ${JSON.stringify(jsonLD, null, 2)}
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
-        h1 {
-            font-size: 2em;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
+        h1 { font-size: 2em; margin-bottom: 20px; }
         .loader {
             border: 4px solid rgba(255,255,255,0.3);
             border-radius: 50%;
@@ -623,15 +557,6 @@ ${JSON.stringify(jsonLD, null, 2)}
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        .meta {
-            margin-top: 20px;
-            font-size: 0.9em;
-            opacity: 0.7;
-        }
     </style>
 </head>
 <body>
@@ -639,9 +564,6 @@ ${JSON.stringify(jsonLD, null, 2)}
         <h1>${item.title}</h1>
         <div class="loader"></div>
         <p>جارٍ التحويل إلى التطبيق...</p>
-        <div class="meta">
-            ${item.category} • ${new Date(item.createdAt).toLocaleDateString('ar-EG')}
-        </div>
     </div>
 </body>
 </html>
@@ -653,7 +575,7 @@ ${JSON.stringify(jsonLD, null, 2)}
   }
 });
 
-// 📌 خبر واحد (API) - Enhanced
+// 📌 خبر واحد
 router.get("/:id/:slug?", async (req, res, next) => {
   try {
     const item = await News.findById(req.params.id)
@@ -665,7 +587,6 @@ router.get("/:id/:slug?", async (req, res, next) => {
       throw new Error("News not found");
     }
 
-    // Increment views asynchronously
     News.findByIdAndUpdate(req.params.id, { $inc: { viewsCount: 1 } }).exec();
 
     const userId = req.user?.id || null;
@@ -687,7 +608,7 @@ router.get("/:id/:slug?", async (req, res, next) => {
   }
 });
 
-// ✏️ تحديث خبر - Enhanced
+// ✏️ تحديث خبر
 router.put(
   "/:id",
   requireAuth,
@@ -736,7 +657,6 @@ router.put(
             { $set: { isFeatured: false } }
           );
           
-          // ⭐ أرشفة عند تعيين Featured
           if (process.env.ENABLE_GOOGLE_INDEXING === "true") {
             const news = await News.findById(req.params.id);
             if (news) {
@@ -765,7 +685,6 @@ router.put(
         throw new Error("News not found");
       }
 
-      // ⭐ أرشفة بعد التعديل
       if (process.env.ENABLE_GOOGLE_INDEXING === "true") {
         const fullUrl = generateNewsUrl(updated._id, updated.slug);
         retryWithBackoff(async () => {
@@ -800,7 +719,7 @@ router.put(
   }
 );
 
-// 🗑️ حذف خبر - Enhanced
+// 🗑️ حذف خبر
 router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) => {
   try {
     const deleted = await News.findByIdAndDelete(req.params.id);
@@ -809,7 +728,6 @@ router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) =>
       throw new Error("News not found");
     }
     
-    // حذف الملفات المرتبطة
     if (deleted.imageUrl) {
       const imagePath = path.join(__dirname, "..", deleted.imageUrl);
       if (fs.existsSync(imagePath)) {
@@ -823,7 +741,6 @@ router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) =>
       }
     }
     
-    // 📍 إعادة ping للـ sitemap بعد الحذف
     setTimeout(() => notifySitemap(), 2000);
     
     res.json({ 
@@ -835,7 +752,7 @@ router.delete("/:id", requireAuth, authorize("admin"), async (req, res, next) =>
   }
 });
 
-// 💖 Toggle like on news - Enhanced
+// 💖 Toggle like
 router.post("/:id/like", requireAuth, async (req, res, next) => {
   try {
     const news = await News.findById(req.params.id);
@@ -870,7 +787,7 @@ router.post("/:id/like", requireAuth, async (req, res, next) => {
   }
 });
 
-// 📊 احصائيات الأخبار
+// 📊 احصائيات
 router.get("/stats/overview", requireAuth, authorize("admin"), async (req, res, next) => {
   try {
     const [total, featured, pending, indexed, failed] = await Promise.all([
