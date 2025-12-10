@@ -9,9 +9,18 @@ const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // ⭐ استدعاء Google Indexing
-const requestIndexing = require("../google/index");
-console.log("🔥 Google Indexing Loaded");
-
+let requestIndexing;
+try {
+  const indexModule = require("../google/index");
+  requestIndexing = indexModule.requestIndexing || indexModule.indexURL || indexModule;
+  console.log("🔥 Google Indexing Loaded Successfully");
+} catch (err) {
+  console.warn("⚠️ Google Indexing not available:", err.message);
+  requestIndexing = async () => {
+    console.log("⚠️ Google Indexing disabled");
+    return false;
+  };
+}
 const router = express.Router();
 
 // 🔹 مكان تخزين الصور (uploads/news)
