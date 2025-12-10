@@ -1,4 +1,5 @@
 const express = require("express");
+const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -9,9 +10,9 @@ const NewsComment = require("../models/NewsComment");
 const { requireAuth, authorize } = require("../middlewares/auth");
 
 // ⭐ استدعاء Google Indexing
-let requestIndexing;
 const requestIndexing = require("../google/index");
 console.log("🔥 Google Indexing Loaded");
+
 const router = express.Router();
 
 // 🔹 مكان تخزين الصور (uploads/news)
