@@ -29,6 +29,12 @@ require("dotenv").config({
 
 console.log("🔥 ENV Loaded ENABLE_GOOGLE_INDEXING:", process.env.ENABLE_GOOGLE_INDEXING);
 
+// ⬅️ هنا استدعاء خدمة الفهرسة (Google Indexing)
+const indexURL = require("./google/index");
+
+console.log("🔥 Google Indexing Loaded");
+
+// باقي الاستدعاءات
 console.log("🔥 Running file:", __filename);
 const express = require("express");
 const mongoose = require("mongoose");
