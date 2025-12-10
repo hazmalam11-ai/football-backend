@@ -27,9 +27,9 @@ require("dotenv").config({
   path: "/root/football-backend/.env"
 });
 
-// Debug to confirm ENV is loaded
 console.log("🔥 ENV Loaded ENABLE_GOOGLE_INDEXING:", process.env.ENABLE_GOOGLE_INDEXING);
 
+console.log("🔥 Running file:", __filename);
 const express = require("express");
 const mongoose = require("mongoose");
 const morgan = require("morgan");
