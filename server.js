@@ -263,6 +263,7 @@ const routesConfig = [
   { path: "/fantasy/points", file: "./routes/fantasyPoints" },
   { path: "/fantasy/mini-leagues", file: "./routes/fantasyMiniLeagues" },
 { path: "/sitemaps", file: "./routes/sitemap" },
+  { path: "/contact", file: "./routes/contact", limiter: apiLimiter },
 ];
 
 routesConfig.forEach(({ path, file, limiter }) => {
