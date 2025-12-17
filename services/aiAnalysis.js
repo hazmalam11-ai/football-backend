@@ -86,7 +86,7 @@ async function analyzeMatch(matchData) {
         weaknesses: structuredAnalysis.weaknesses,
         fullText: analysisText
       },
-      aiModel: 'groq-llama-3.1-70b',
+      aiModel: 'groq-llama-3.3-70b',
       analysisLanguage: 'ar',
       processingTime: Date.now() - startTime,
       isPublished: true
