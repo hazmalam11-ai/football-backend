@@ -20,6 +20,11 @@
  * - Memory Leak Prevention
  * - Query Optimization
  * - CDN-Ready Static Assets
+ * 
+ * 🤖 AI FEATURES:
+ * - Auto Match Analysis
+ * - Groq AI Integration
+ * - Smart Cron Jobs
  */
 
 // Load .env from absolute path
@@ -28,6 +33,7 @@ require("dotenv").config({
 });
 
 console.log("🔥 ENV Loaded ENABLE_GOOGLE_INDEXING:", process.env.ENABLE_GOOGLE_INDEXING);
+console.log("🤖 ENV Loaded ENABLE_AUTO_ANALYSIS:", process.env.ENABLE_AUTO_ANALYSIS);
 
 // ⬅️ هنا استدعاء خدمة الفهرسة (Google Indexing)
 const indexURL = require("./google/index");
@@ -256,13 +262,17 @@ const routesConfig = [
   { path: "/api/leagues", file: "./routes/leagues" },
   { path: "/api/match-data", file: "./routes/matchData" },
   { path: "/api/insights", file: "./routes/insights" },
+  
+  // 🤖 AI Analysis Route
+  { path: "/api/analysis", file: "./routes/analysis", limiter: apiLimiter },
+  
   { path: "/fantasy/teams", file: "./routes/fantasyTeams" },
   { path: "/fantasy/gameweeks", file: "./routes/fantasygameweeks" },
   { path: "/fantasy/leaderboard", file: "./routes/fantasyLeaderboard" },
   { path: "/fantasy/scoring", file: "./routes/fantasyScoring" },
   { path: "/fantasy/points", file: "./routes/fantasyPoints" },
   { path: "/fantasy/mini-leagues", file: "./routes/fantasyMiniLeagues" },
-{ path: "/sitemaps", file: "./routes/sitemap" },
+  { path: "/sitemaps", file: "./routes/sitemap" },
   { path: "/contact", file: "./routes/contact", limiter: apiLimiter },
 ];
 
@@ -304,12 +314,16 @@ io.on("connection", (socket) => {
 // ===============================
 app.get("/", (req, res) => {
   res.json({
-    message: "⚽ Mal3abak Backend - Ultra Secure Edition",
-    version: "2.0.0",
+    message: "⚽ Mal3abak Backend - Ultra Secure Edition with AI",
+    version: "2.1.0",
     uptime: Math.floor(process.uptime()),
     mode: NODE_ENV,
     timestamp: new Date().toISOString(),
     activeConnections: activeConnections.size,
+    features: {
+      googleIndexing: process.env.ENABLE_GOOGLE_INDEXING === 'true',
+      aiAnalysis: process.env.ENABLE_AUTO_ANALYSIS === 'true'
+    }
   });
 });
 
@@ -318,6 +332,7 @@ app.get("/", (req, res) => {
 // ===============================
 // 👉 Add sitemap routes BEFORE 404
 app.use(require("./routes/sitemap"));
+
 // ===============================
 // 🚫 404 Handler
 // ===============================
@@ -333,10 +348,12 @@ app.use((req, res) => {
 // ❗ Error Handler (must stay last)
 // ===============================
 app.use(errorHandler);
+
 // ===============================
 // 🔁 Background Jobs
 // ===============================
 setTimeout(() => {
+  // AutoSync Service
   try {
     require("./services/autoSync");
     console.log("✅ AutoSync started");
@@ -344,12 +361,28 @@ setTimeout(() => {
     console.warn("⚠️ AutoSync missing:", e.message);
   }
 
+  // Auto Gameweek Service
   try {
     const ags = require("./services/autoGameweekService");
-    if (ags?.start) ags.start();
+    if (ags?.start) {
+      ags.start();
+      console.log("✅ AutoGameweek started");
+    }
   } catch (e) {
     console.warn("⚠️ AutoGameweek missing:", e.message);
   }
+
+  // 🤖 AI Auto-Analysis Service
+  try {
+    const autoAnalyzeService = require("./services/autoAnalyzeService");
+    if (autoAnalyzeService?.start) {
+      autoAnalyzeService.start();
+      console.log("✅ AI Auto-Analysis Service started");
+    }
+  } catch (e) {
+    console.warn("⚠️ AutoAnalyze missing:", e.message);
+  }
+
 }, 5000);
 
 // ===============================
@@ -365,6 +398,7 @@ const startServer = () => {
     console.log("🌍 Environment: " + NODE_ENV);
     console.log("💻 CPU Cores: " + os.cpus().length);
     console.log("🔒 Security: MAXIMUM | ⚡ Performance: OPTIMIZED");
+    console.log("🤖 AI Analysis: " + (process.env.ENABLE_AUTO_ANALYSIS === 'true' ? 'ENABLED' : 'DISABLED'));
     console.log("=".repeat(60) + "\n");
   });
 
@@ -389,6 +423,7 @@ const gracefulShutdown = (signal) => {
   serverInstance.close(() => {
     mongoose.connection.close(false, () => {
       io.close(() => {
+        console.log("✅ Server shut down gracefully");
         process.exit(0);
       });
     });
@@ -402,5 +437,15 @@ const gracefulShutdown = (signal) => {
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 module.exports = server;
