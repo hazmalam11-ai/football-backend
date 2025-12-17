@@ -29,21 +29,21 @@ async function analyzeMatch(matchData) {
     
     // Call Groq AI
     const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: 'أنت محلل كرة قدم محترف وخبير في التحليل التكتيكي والفني للمباريات. قدم تحليلات دقيقة ومفصلة باللغة العربية.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      model: 'llama-3.1-70b-versatile',
-      temperature: 0.7,
-      max_tokens: 3000,
-      top_p: 0.9
-    });
+  messages: [
+    {
+      role: 'system',
+      content: 'أنت محلل كرة قدم محترف...'
+    },
+    {
+      role: 'user',
+      content: prompt
+    }
+  ],
+  model: 'llama-3.3-70b-versatile',  // 👈 التعديل هنا
+  temperature: 0.7,
+  max_tokens: 3000,
+  top_p: 0.9
+});
     
     const analysisText = completion.choices[0].message.content;
     
