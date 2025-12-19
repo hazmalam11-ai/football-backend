@@ -3,90 +3,36 @@ const router = express.Router();
 const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
+// ============ STATIC ROUTES (SPECIFIC) ============
 
 /**
- * @route GET /api/analysis
- * @desc Get latest analyses (paginated)
+ * @route GET /api/analysis/test
+ * @desc Test endpoint
  */
-router.get('/', async (req, res) => {
+router.get('/test', async (req, res) => {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-
-    const analyses = await Analysis.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
     const count = await Analysis.countDocuments();
-
+    const latest = await Analysis.findOne().sort({ createdAt: -1 });
+    
     return res.json({
       success: true,
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-      data: analyses
+      message: 'Analysis API is working',
+      totalAnalyses: count,
+      latestAnalysis: latest ? {
+        matchId: latest.matchId,
+        homeTeam: latest.homeTeam,
+        awayTeam: latest.awayTeam,
+        date: latest.date
+      } : null,
+      timestamp: new Date().toISOString()
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
-
-
-/**
- * @route GET /api/analysis/:matchId
- * @desc Get analysis by match ID
- */
-router.get('/:matchId', async (req, res) => {
-  try {
-    const analysis = await Analysis.findOne({ matchId: req.params.matchId });
-
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        message: 'No analysis found for this match'
-      });
-    }
-
-    return res.json({ success: true, data: analysis });
-
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-
-/**
- * @route POST /api/analysis/generate
- * @desc Manually generate AI analysis
- */
-router.post('/generate', async (req, res) => {
-  try {
-    const matchData = req.body;
-
-    if (!matchData || !matchData.homeTeam || !matchData.awayTeam) {
-      return res.status(400).json({ success: false, message: 'Match data incomplete' });
-    }
-
-    const result = await analyzeMatch(matchData);
-
-    return res.json({
-      success: true,
-      message: 'Analysis created',
-      data: result
-    });
-
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 
 /**
  * @route GET /api/analysis/search?q=
- * @desc Search analysis by team / keyword
  */
 router.get('/search/query', async (req, res) => {
   try {
@@ -103,16 +49,13 @@ router.get('/search/query', async (req, res) => {
     }).limit(50);
 
     return res.json({ success: true, data: results });
-
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
 /**
  * @route GET /api/analysis/trending
- * @desc Get latest 10 trending analyses
  */
 router.get('/trending/list', async (req, res) => {
   try {
@@ -121,17 +64,13 @@ router.get('/trending/list', async (req, res) => {
       .limit(10);
 
     return res.json({ success: true, data: analyses });
-
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
 /**
  * @route GET /api/analysis/filter
- * @desc Filter results
- * @query team / tournament / date
  */
 router.get('/filter/options', async (req, res) => {
   try {
@@ -157,16 +96,13 @@ router.get('/filter/options', async (req, res) => {
       .limit(50);
 
     return res.json({ success: true, data: analyses });
-
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
 /**
  * @route GET /api/analysis/stats/daily
- * @desc Count analyses created per day
  */
 router.get('/stats/daily', async (req, res) => {
   try {
@@ -182,11 +118,85 @@ router.get('/stats/daily', async (req, res) => {
     ]);
 
     return res.json({ success: true, data: stats });
-
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * @route POST /api/analysis/generate
+ */
+router.post('/generate', async (req, res) => {
+  try {
+    const matchData = req.body;
+
+    if (!matchData || !matchData.homeTeam || !matchData.awayTeam) {
+      return res.status(400).json({ success: false, message: 'Match data incomplete' });
+    }
+
+    const result = await analyzeMatch(matchData);
+
+    return res.json({
+      success: true,
+      message: 'Analysis created',
+      data: result
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ DYNAMIC ROUTES (GENERIC) - MUST BE LAST ============
+
+/**
+ * @route GET /api/analysis
+ * @desc Get latest analyses (paginated)
+ */
+router.get('/', async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const analyses = await Analysis.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const count = await Analysis.countDocuments();
+
+    return res.json({
+      success: true,
+      total: count,
+      page,
+      pages: Math.ceil(count / limit),
+      data: analyses
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/analysis/:matchId
+ * @desc Get analysis by match ID (MUST BE LAST ROUTE)
+ */
+router.get('/:matchId', async (req, res) => {
+  try {
+    const analysis = await Analysis.findOne({ matchId: req.params.matchId });
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: `No analysis found for match: ${req.params.matchId}`,
+        hint: 'Try GET /api/analysis to see all available analyses'
+      });
+    }
+
+    return res.json({ success: true, data: analysis });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 module.exports = router;
