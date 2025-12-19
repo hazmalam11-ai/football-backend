@@ -3,166 +3,190 @@ const router = express.Router();
 const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
-// Get analysis for specific match
+
+/**
+ * @route GET /api/analysis
+ * @desc Get latest analyses (paginated)
+ */
+router.get('/', async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const analyses = await Analysis.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const count = await Analysis.countDocuments();
+
+    return res.json({
+      success: true,
+      total: count,
+      page,
+      pages: Math.ceil(count / limit),
+      data: analyses
+    });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * @route GET /api/analysis/:matchId
+ * @desc Get analysis by match ID
+ */
 router.get('/:matchId', async (req, res) => {
   try {
     const analysis = await Analysis.findOne({ matchId: req.params.matchId });
-    res.json(analysis);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// Get all analyses
-router.get('/', async (req, res) => {
-  try {
-    const analyses = await Analysis.find().sort({ createdAt: -1 }).limit(20);
-    res.json(analyses);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-module.exports = router;
-```
-
----
-
-#### **`models/Analysis.js`** - Database Model
-```javascript
-const mongoose = require('mongoose');
-
-const analysisSchema = new mongoose.Schema({
-  matchId: { type: String, required: true, unique: true },
-  homeTeam: String,
-  awayTeam: String,
-  score: String,
-  tournament: String,
-  date: Date,
-  analysis: {
-    summary: String,
-    performance: String,
-    keyPlayers: String,
-    tactics: String,
-    statistics: String
-  },
-  createdAt: { type: Date, default: Date.now }
-});
-
-module.exports = mongoose.model('Analysis', analysisSchema);
-```
-
----
-
-#### **`services/aiAnalysis.js`** - AI Service
-```javascript
-const Groq = require('groq-sdk');
-const Analysis = require('../models/Analysis');
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY // Get free key from console.groq.com
-});
-
-async function analyzeMatch(matchData) {
-  try {
-    const prompt = `
-أنت محلل كرة قدم محترف. حلل هذه المباراة بالتفصيل:
-
-الفريق الأول: ${matchData.homeTeam.name}
-الفريق الثاني: ${matchData.awayTeam.name}
-النتيجة: ${matchData.scoreA} - ${matchData.scoreB}
-البطولة: ${matchData.tournament.name}
-التاريخ: ${matchData.date}
-
-قدم تحليل شامل يتضمن:
-1. ملخص المباراة
-2. أداء الفريقين
-3. اللاعبين المؤثرين
-4. التكتيكات المستخدمة
-5. الإحصائيات الرئيسية
-`;
-
-    const completion = await groq.chat.completions.create({
-  messages: [{ role: 'user', content: prompt }],
-  model: 'llama-3.3-70b-versatile',
-  temperature: 0.7,
-  max_tokens: 2000
-});
-
-    const analysisText = completion.choices[0].message.content;
-
-    // Save to database
-    const analysis = new Analysis({
-      matchId: matchData._id,
-      homeTeam: matchData.homeTeam.name,
-      awayTeam: matchData.awayTeam.name,
-      score: `${matchData.scoreA} - ${matchData.scoreB}`,
-      tournament: matchData.tournament.name,
-      date: matchData.date,
-      analysis: {
-        summary: analysisText,
-        performance: extractSection(analysisText, 'أداء'),
-        keyPlayers: extractSection(analysisText, 'اللاعبين'),
-        tactics: extractSection(analysisText, 'التكتيكات'),
-        statistics: extractSection(analysisText, 'الإحصائيات')
-      }
-    });
-
-    await analysis.save();
-    console.log(`✅ Analysis saved for match ${matchData._id}`);
-    return analysis;
-
-  } catch (error) {
-    console.error('❌ AI Analysis Error:', error);
-    throw error;
-  }
-}
-
-function extractSection(text, keyword) {
-  // Extract specific section from analysis
-  const lines = text.split('\n');
-  return lines.find(line => line.includes(keyword)) || '';
-}
-
-module.exports = analyzeMatch;
-```
-
----
-
-#### **`scripts/autoAnalyze.js`** - Cron Job
-```javascript
-const cron = require('node-cron');
-const axios = require('axios');
-const analyzeMatch = require('../services/aiAnalysis');
-const Analysis = require('../models/Analysis');
-
-// Run every 10 minutes
-cron.schedule('*/10 * * * *', async () => {
-  console.log('🔍 Checking for finished matches...');
-
-  try {
-    // Get today's matches from your API
-    const response = await axios.get('https://api.mal3abak.com/matches/today');
-    const matches = response.data;
-
-    for (const match of matches) {
-      // Check if match is finished (FT) and not analyzed yet
-      if (match.status === 'FT') {
-        const exists = await Analysis.findOne({ matchId: match._id });
-        
-        if (!exists) {
-          console.log(`🎯 Analyzing match: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
-          await analyzeMatch(match);
-          
-          // Wait 2 seconds between analyses (to avoid rate limits)
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'No analysis found for this match'
+      });
     }
 
+    return res.json({ success: true, data: analysis });
+
   } catch (error) {
-    console.error('❌ Auto-analyze error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-console.log('✅ Auto-analysis service started');
+
+/**
+ * @route POST /api/analysis/generate
+ * @desc Manually generate AI analysis
+ */
+router.post('/generate', async (req, res) => {
+  try {
+    const matchData = req.body;
+
+    if (!matchData || !matchData.homeTeam || !matchData.awayTeam) {
+      return res.status(400).json({ success: false, message: 'Match data incomplete' });
+    }
+
+    const result = await analyzeMatch(matchData);
+
+    return res.json({
+      success: true,
+      message: 'Analysis created',
+      data: result
+    });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * @route GET /api/analysis/search?q=
+ * @desc Search analysis by team / keyword
+ */
+router.get('/search/query', async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q) return res.json({ success: true, data: [] });
+
+    const results = await Analysis.find({
+      $or: [
+        { homeTeam: { $regex: q, $options: 'i' } },
+        { awayTeam: { $regex: q, $options: 'i' } },
+        { tournament: { $regex: q, $options: 'i' } },
+        { 'analysis.summary': { $regex: q, $options: 'i' } }
+      ]
+    }).limit(50);
+
+    return res.json({ success: true, data: results });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * @route GET /api/analysis/trending
+ * @desc Get latest 10 trending analyses
+ */
+router.get('/trending/list', async (req, res) => {
+  try {
+    const analyses = await Analysis.find()
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    return res.json({ success: true, data: analyses });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * @route GET /api/analysis/filter
+ * @desc Filter results
+ * @query team / tournament / date
+ */
+router.get('/filter/options', async (req, res) => {
+  try {
+    const query = {};
+
+    if (req.query.team) {
+      query.$or = [
+        { homeTeam: req.query.team },
+        { awayTeam: req.query.team }
+      ];
+    }
+
+    if (req.query.tournament) {
+      query.tournament = req.query.tournament;
+    }
+
+    if (req.query.date) {
+      query.date = { $gte: new Date(req.query.date) };
+    }
+
+    const analyses = await Analysis.find(query)
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    return res.json({ success: true, data: analyses });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * @route GET /api/analysis/stats/daily
+ * @desc Count analyses created per day
+ */
+router.get('/stats/daily', async (req, res) => {
+  try {
+    const stats = await Analysis.aggregate([
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: -1 } },
+      { $limit: 30 }
+    ]);
+
+    return res.json({ success: true, data: stats });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+module.exports = router;
