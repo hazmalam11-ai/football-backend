@@ -33,23 +33,40 @@ async function generateAndCache(key, fn) {
   return xml;
 }
 
-// ----------------------------------------
-// 1) MAIN SITEMAP INDEX
-// ----------------------------------------
+// -------------------------------------------------
+// MAIN SITEMAP INDEX
+// -------------------------------------------------
 router.get("/sitemap.xml", async (req, res) => {
   try {
     const xml = wrapXML(`
       <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-        <sitemap><loc>${BASE_URL}/sitemaps/news.xml</loc></sitemap>
-        <sitemap><loc>${BASE_URL}/sitemaps/matches.xml</loc></sitemap>
-        <sitemap><loc>${BASE_URL}/sitemaps/teams.xml</loc></sitemap>
-        <sitemap><loc>${BASE_URL}/sitemaps/players.xml</loc></sitemap>
+
+        <sitemap>
+          <loc>${BASE_URL}/sitemaps/static.xml</loc>
+        </sitemap>
+
+        <sitemap>
+          <loc>${BASE_URL}/sitemaps/news.xml</loc>
+        </sitemap>
+
+        <sitemap>
+          <loc>${BASE_URL}/sitemaps/matches.xml</loc>
+        </sitemap>
+
+        <sitemap>
+          <loc>${BASE_URL}/sitemaps/teams.xml</loc>
+        </sitemap>
+
+        <sitemap>
+          <loc>${BASE_URL}/sitemaps/players.xml</loc>
+        </sitemap>
+
       </sitemapindex>
     `);
 
     sendXML(res, xml);
 
-    // AUTO PING Google & Bing
+    // PING search engines
     fetch(`https://www.google.com/ping?sitemap=${BASE_URL}/sitemaps/sitemap.xml`).catch(() => {});
     fetch(`https://www.bing.com/ping?sitemap=${BASE_URL}/sitemaps/sitemap.xml`).catch(() => {});
 
@@ -59,9 +76,49 @@ router.get("/sitemap.xml", async (req, res) => {
   }
 });
 
-// ----------------------------------------
-// 2) NEWS SITEMAP
-// ----------------------------------------
+// -------------------------------------------------
+// STATIC PAGES SITEMAP
+// -------------------------------------------------
+router.get("/static.xml", async (req, res) => {
+  try {
+    const staticUrls = [
+      "/",
+      "/analysis",
+      "/contact",
+      "/privacy",
+      "/terms",
+      "/leagues",
+      "/matches",
+      "/news",
+      "/players",
+      "/teams",
+      "/today",
+      "/fantasy",
+      "/fantasy/players",
+      "/my-team"
+    ];
+
+    const urls = staticUrls.map(url => `
+      <url>
+        <loc>${BASE_URL}${url}</loc>
+        <lastmod>${new Date().toISOString()}</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+      </url>
+    `).join("");
+
+    sendXML(res, wrapXML(`
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>
+    `));
+
+  } catch (err) {
+    res.status(500).send("Error generating static sitemap");
+  }
+});
+
+// -------------------------------------------------
+// NEWS SITEMAP
+// -------------------------------------------------
 router.get("/news.xml", async (req, res) => {
   try {
     const xml = await generateAndCache("news", async () => {
@@ -81,18 +138,17 @@ router.get("/news.xml", async (req, res) => {
 
     sendXML(res, xml);
   } catch (err) {
-    console.error("News sitemap error:", err);
     res.status(500).send("Error generating news sitemap");
   }
 });
 
-// ----------------------------------------
-// 3) MATCHES SITEMAP
-// ----------------------------------------
+// -------------------------------------------------
+// MATCHES SITEMAP
+// -------------------------------------------------
 router.get("/matches.xml", async (req, res) => {
   try {
     const xml = await generateAndCache("matches", async () => {
-      const matches = await Match.find().sort({ updatedAt: -1 });
+      const matches = await Match.find().sort({ createdAt: -1 });
 
       const urls = matches.map(m => `
         <url>
@@ -108,14 +164,13 @@ router.get("/matches.xml", async (req, res) => {
 
     sendXML(res, xml);
   } catch (err) {
-    console.error("Matches sitemap error:", err);
     res.status(500).send("Error generating matches sitemap");
   }
 });
 
-// ----------------------------------------
-// 4) TEAMS SITEMAP
-// ----------------------------------------
+// -------------------------------------------------
+// TEAMS SITEMAP
+// -------------------------------------------------
 router.get("/teams.xml", async (req, res) => {
   try {
     const xml = await generateAndCache("teams", async () => {
@@ -135,14 +190,13 @@ router.get("/teams.xml", async (req, res) => {
 
     sendXML(res, xml);
   } catch (err) {
-    console.error("Teams sitemap error:", err);
     res.status(500).send("Error generating teams sitemap");
   }
 });
 
-// ----------------------------------------
-// 5) PLAYERS SITEMAP
-// ----------------------------------------
+// -------------------------------------------------
+// PLAYERS SITEMAP
+// -------------------------------------------------
 router.get("/players.xml", async (req, res) => {
   try {
     const xml = await generateAndCache("players", async () => {
@@ -162,7 +216,6 @@ router.get("/players.xml", async (req, res) => {
 
     sendXML(res, xml);
   } catch (err) {
-    console.error("Players sitemap error:", err);
     res.status(500).send("Error generating players sitemap");
   }
 });
