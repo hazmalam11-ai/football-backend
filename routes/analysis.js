@@ -3,17 +3,15 @@ const router = express.Router();
 const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
-// ============ STATIC ROUTES (SPECIFIC) ============
+// ==========================================
+// STATIC ROUTES
+// ==========================================
 
-/**
- * @route GET /api/analysis/test
- * @desc Test endpoint
- */
 router.get('/test', async (req, res) => {
   try {
     const count = await Analysis.countDocuments();
     const latest = await Analysis.findOne().sort({ createdAt: -1 });
-    
+
     return res.json({
       success: true,
       message: 'Analysis API is working',
@@ -31,9 +29,6 @@ router.get('/test', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/analysis/search?q=
- */
 router.get('/search/query', async (req, res) => {
   try {
     const q = req.query.q;
@@ -54,9 +49,6 @@ router.get('/search/query', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/analysis/trending
- */
 router.get('/trending/list', async (req, res) => {
   try {
     const analyses = await Analysis.find()
@@ -69,9 +61,6 @@ router.get('/trending/list', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/analysis/filter
- */
 router.get('/filter/options', async (req, res) => {
   try {
     const query = {};
@@ -101,9 +90,6 @@ router.get('/filter/options', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/analysis/stats/daily
- */
 router.get('/stats/daily', async (req, res) => {
   try {
     const stats = await Analysis.aggregate([
@@ -123,9 +109,6 @@ router.get('/stats/daily', async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/analysis/generate
- */
 router.post('/generate', async (req, res) => {
   try {
     const matchData = req.body;
@@ -146,12 +129,10 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// ============ DYNAMIC ROUTES (GENERIC) - MUST BE LAST ============
+// ==========================================
+// PAGINATED LIST + matchId SELECT FIX
+// ==========================================
 
-/**
- * @route GET /api/analysis
- * @desc Get latest analyses (paginated)
- */
 router.get('/', async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
@@ -161,7 +142,8 @@ router.get('/', async (req, res) => {
     const analyses = await Analysis.find()
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .select('matchId homeTeam awayTeam tournament score analysis createdAt');
 
     const count = await Analysis.countDocuments();
 
@@ -177,10 +159,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/analysis/:matchId
- * @desc Get analysis by match ID (MUST BE LAST ROUTE)
- */
+// ==========================================
+// GET ANALYSIS BY MATCH ID
+// ==========================================
+
 router.get('/:matchId', async (req, res) => {
   try {
     const analysis = await Analysis.findOne({ matchId: req.params.matchId });
@@ -189,7 +171,7 @@ router.get('/:matchId', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: `No analysis found for match: ${req.params.matchId}`,
-        hint: 'Try GET /api/analysis to see all available analyses'
+        hint: 'Try GET /api/analysis'
       });
     }
 
