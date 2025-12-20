@@ -4,7 +4,7 @@ const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
 // ===============================
-// 🏆 الدوريات و البطولات المسموح بها
+// 🏆 الدوريات و البطولات المسموح بها (اسم + دولة)
 // ===============================
 const MAJOR_LEAGUES = [
   // الدوريات الأوروبية الكبرى
@@ -14,13 +14,20 @@ const MAJOR_LEAGUES = [
   { name: "Bundesliga", country: "Germany" },
   { name: "Ligue 1", country: "France" },
 
-  // بطولات أوروبا
+  // Cups
+  { name: "FA Cup", country: "England" },
+  { name: "Copa del Rey", country: "Spain" },
+  { name: "Coppa Italia", country: "Italy" },
+  { name: "DFB Pokal", country: "Germany" },
+  { name: "Coupe de France", country: "France" },
+
+  // UEFA
   { name: "UEFA Champions League" },
   { name: "UEFA Europa League" },
   { name: "UEFA Europa Conference League" },
   { name: "UEFA Super Cup" },
 
-  // البطولات العالمية
+  // World
   { name: "FIFA Club World Cup" },
   { name: "FIFA World Cup" },
 
@@ -42,31 +49,43 @@ const MAJOR_LEAGUES = [
   { name: "Arab Club Champions Cup" }
 ];
 
-// ← استخرج أسماء البطولات فقط
+
+// ============
+// أسماء فقط
+// ============
 const MAJOR_COMPETITIONS = MAJOR_LEAGUES.map(l => l.name);
 
 
+// ============
+// فلتر بالقوة: بالاسم + الدولة لو متاحة
+// ============
+const isMajorLeague = (tournament) => {
+  return MAJOR_LEAGUES.some(l =>
+    l.name === tournament.name &&
+    (!l.country || l.country === tournament.country)
+  );
+};
+
 // ===============================
-// TEST ROUTE
+// TEST
 // ===============================
 router.get('/test', async (req, res) => {
   try {
     const count = await Analysis.countDocuments();
     const latest = await Analysis.findOne().sort({ createdAt: -1 });
 
-    return res.json({
+    res.json({
       success: true,
       message: 'Analysis API is working',
       totalAnalyses: count,
-      latestAnalysis: latest || null,
-      timestamp: new Date().toISOString()
+      latestAnalysis: latest,
+      timestamp: new Date()
     });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // SEARCH
@@ -81,73 +100,51 @@ router.get('/search/query', async (req, res) => {
       $or: [
         { "homeTeam.name": { $regex: q, $options: 'i' } },
         { "awayTeam.name": { $regex: q, $options: 'i' } },
-        { "tournament.name": { $regex: q, $options: 'i' } },
-        { "analysis.summary": { $regex: q, $options: 'i' } }
+        { "tournament.name": { $regex: q, $options: 'i' } }
       ]
     }).limit(50);
 
-    return res.json({ success: true, data: results });
+    res.json({ success: true, data: results });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // TRENDING
 // ===============================
 router.get('/trending/list', async (req, res) => {
   try {
-    const analyses = await Analysis.find({
-      "tournament.name": { $in: MAJOR_COMPETITIONS }
-    })
+    const analyses = await Analysis.find()
       .sort({ views: -1 })
-      .limit(10);
+      .limit(50);
 
-    return res.json({ success: true, data: analyses });
+    // تصفية قوية
+    const filtered = analyses.filter(a => isMajorLeague(a.tournament));
+
+    res.json({ success: true, data: filtered.slice(0, 10) });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // FILTER OPTIONS
 // ===============================
 router.get('/filter/options', async (req, res) => {
   try {
-    const query = {
-      "tournament.name": { $in: MAJOR_COMPETITIONS }
-    };
+    let analyses = await Analysis.find().sort({ createdAt: -1 });
 
-    if (req.query.team) {
-      query.$or = [
-        { "homeTeam.name": req.query.team },
-        { "awayTeam.name": req.query.team }
-      ];
-    }
+    analyses = analyses.filter(a => isMajorLeague(a.tournament));
 
-    if (req.query.tournament) {
-      query["tournament.name"] = req.query.tournament;
-    }
-
-    if (req.query.date) {
-      query.date = { $gte: new Date(req.query.date) };
-    }
-
-    const analyses = await Analysis.find(query)
-      .sort({ createdAt: -1 })
-      .limit(50);
-
-    return res.json({ success: true, data: analyses });
+    res.json({ success: true, data: analyses.slice(0, 50) });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // DAILY STATS
@@ -156,7 +153,9 @@ router.get('/stats/daily', async (req, res) => {
   try {
     const stats = await Analysis.aggregate([
       {
-        $match: { "tournament.name": { $in: MAJOR_COMPETITIONS } }
+        $match: {
+          "tournament.name": { $in: MAJOR_COMPETITIONS }
+        }
       },
       {
         $group: {
@@ -168,93 +167,68 @@ router.get('/stats/daily', async (req, res) => {
       { $limit: 30 }
     ]);
 
-    return res.json({ success: true, data: stats });
+    res.json({ success: true, data: stats });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // GENERATE
 // ===============================
 router.post('/generate', async (req, res) => {
   try {
-    const matchData = req.body;
+    const result = await analyzeMatch(req.body);
 
-    if (!matchData || !matchData.homeTeam || !matchData.awayTeam) {
-      return res.status(400).json({ success: false, message: 'Match data incomplete' });
-    }
-
-    const result = await analyzeMatch(matchData);
-
-    return res.json({
+    res.json({
       success: true,
-      message: 'Analysis created',
       data: result
     });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
 // ===============================
-// PAGINATED LIST (MAJOR ONLY)
+// PAGINATED (قوي)
 // ===============================
 router.get('/', async (req, res) => {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const all = await Analysis.find().sort({ createdAt: -1 });
 
-    const analyses = await Analysis.find({
-      "tournament.name": { $in: MAJOR_COMPETITIONS }
-    })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const filtered = all.filter(a => isMajorLeague(a.tournament));
 
-    const count = await Analysis.countDocuments({
-      "tournament.name": { $in: MAJOR_COMPETITIONS }
-    });
-
-    return res.json({
+    res.json({
       success: true,
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-      data: analyses
+      total: filtered.length,
+      data: filtered.slice(0, 50)
     });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-
 // ===============================
-// GET SINGLE
+// SINGLE
 // ===============================
 router.get('/:matchId', async (req, res) => {
   try {
     const analysis = await Analysis.findOne({ matchId: req.params.matchId });
 
-    if (!analysis) {
+    if (!analysis)
       return res.status(404).json({
         success: false,
-        message: `No analysis found for match: ${req.params.matchId}`
+        message: "Not found"
       });
-    }
 
-    return res.json({ success: true, data: analysis });
+    res.json({ success: true, data: analysis });
 
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 module.exports = router;
