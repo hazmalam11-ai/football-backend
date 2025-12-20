@@ -3,13 +3,13 @@ const axios = require('axios');
 const { analyzeMatch } = require('./aiAnalysis');
 const Analysis = require('../models/Analysis');
 
-// Configuration
 const ENABLED = process.env.ENABLE_AUTO_ANALYSIS === 'true';
-const CHECK_INTERVAL = process.env.ANALYSIS_CHECK_INTERVAL || 10; // minutes
+const CHECK_INTERVAL = Number(process.env.ANALYSIS_CHECK_INTERVAL || 10);
 const API_BASE_URL = process.env.API_BASE_URL || 'https://api.mal3abak.com';
 
 let isRunning = false;
 let cronJob = null;
+
 let stats = {
   totalChecks: 0,
   matchesAnalyzed: 0,
@@ -18,57 +18,45 @@ let stats = {
   errors: 0
 };
 
-/**
- * 🚀 Start the auto-analysis service
- */
-function start() {
-  if (!ENABLED) {
-    console.log('⏸️  Auto-analysis is disabled (ENABLE_AUTO_ANALYSIS=false)');
-    return;
-  }
-
-  if (!process.env.GROQ_API_KEY) {
-    console.error('❌ GROQ_API_KEY is required for auto-analysis');
-    return;
-  }
-
-  console.log(`🤖 Starting Auto-Analysis Service...`);
-  console.log(`⏰ Check interval: Every ${CHECK_INTERVAL} minutes`);
-  
-  // Run immediately on startup
-  setTimeout(() => {
-    checkAndAnalyzeMatches();
-  }, 10000); // Wait 10 seconds after server starts
-
-  // Schedule cron job
-  const cronExpression = `*/${CHECK_INTERVAL} * * * *`;
-  cronJob = cron.schedule(cronExpression, () => {
-    if (!isRunning) {
-      checkAndAnalyzeMatches();
-    } else {
-      console.log('⏳ Previous analysis still running, skipping...');
-    }
-  });
-
-  console.log('✅ Auto-Analysis Service started successfully');
+function getMatchId(match) {
+  return match.apiId || match._id || match.fixture?.id;
 }
 
-/**
- * 🛑 Stop the auto-analysis service
- */
-function stop() {
-  if (cronJob) {
-    cronJob.stop();
-    console.log('🛑 Auto-Analysis Service stopped');
+function isMatchFinished(match) {
+  const status = match.status || match.fixture?.status?.short;
+
+  return ['FT', 'AET', 'PEN'].includes(
+    (status || '').toString().toUpperCase()
+  );
+}
+
+async function fetchTodayMatches() {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/matches/today`, {
+      timeout: 15000
+    });
+    return res.data || [];
+  } catch (e) {
+    console.error('❌ Error fetching today matches:', e.message);
+    return [];
   }
 }
 
-/**
- * 🔍 Check and analyze finished matches
- */
+async function fetchYesterdayMatches() {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/matches/yesterday`, {
+      timeout: 15000
+    });
+    return res.data || [];
+  } catch (e) {
+    console.error('❌ Error fetching yesterday matches:', e.message);
+    return [];
+  }
+}
+
 async function checkAndAnalyzeMatches() {
   if (isRunning) {
-    console.log('⏳ Analysis already in progress');
+    console.log('⏳ Previous analysis still running, skipping…');
     return;
   }
 
@@ -77,143 +65,110 @@ async function checkAndAnalyzeMatches() {
   stats.lastCheck = new Date();
 
   console.log('\n' + '='.repeat(60));
-  console.log('🔍 Checking for finished matches to analyze...');
+  console.log('🔍 Checking finished matches for analysis…');
   console.log('='.repeat(60));
 
   try {
-    // Get today's matches
-    const todayMatches = await fetchTodayMatches();
-    console.log(`📊 Found ${todayMatches.length} matches today`);
+    const today = await fetchTodayMatches();
+    const yesterday = await fetchYesterdayMatches();
+    const matches = [...today, ...yesterday];
 
-    // Get yesterday's matches (in case we missed any)
-    const yesterdayMatches = await fetchYesterdayMatches();
-    console.log(`📊 Found ${yesterdayMatches.length} matches yesterday`);
+    const finished = matches.filter(m => isMatchFinished(m));
+    console.log(`📊 Finished matches found: ${finished.length}`);
 
-    const allMatches = [...todayMatches, ...yesterdayMatches];
+    const toAnalyze = [];
 
-    // Filter finished matches (FT = Full Time)
-    const finishedMatches = allMatches.filter(match => 
-      match.status === 'FT' || 
-      match.status === 'AET' || 
-      match.status === 'PEN'
-    );
+    for (const m of finished) {
+      const id = getMatchId(m);
 
-    console.log(`✅ Found ${finishedMatches.length} finished matches`);
+      if (!id) continue;
 
-    if (finishedMatches.length === 0) {
-      console.log('ℹ️  No finished matches to analyze');
-      isRunning = false;
-      return;
+      const exists = await Analysis.findByMatchId(id);
+
+      if (!exists) toAnalyze.push(m);
     }
 
-    // Check which matches need analysis
-    const matchesToAnalyze = [];
-    
-    for (const match of finishedMatches) {
-      const exists = await Analysis.findByMatchId(match._id || match.apiId);
-      
-      if (!exists) {
-        matchesToAnalyze.push(match);
-      }
-    }
+    console.log(`🎯 Matches needing analysis: ${toAnalyze.length}`);
 
-    console.log(`🎯 Matches requiring analysis: ${matchesToAnalyze.length}`);
+    for (const match of toAnalyze) {
+      try {
+        const id = getMatchId(match);
 
-    // Analyze matches
-    if (matchesToAnalyze.length > 0) {
-      for (const match of matchesToAnalyze) {
-        try {
-          console.log(`\n🤖 Analyzing: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
-          
-          const analysis = await analyzeMatch(match);
-          
-          if (analysis) {
-            stats.matchesAnalyzed++;
-            stats.lastAnalysis = new Date();
-            console.log(`✅ Analysis saved for: ${match.homeTeam.name} vs ${match.awayTeam.name}`);
-          }
-
-          // Wait 3 seconds between analyses to avoid rate limits
-          await sleep(3000);
-
-        } catch (error) {
-          stats.errors++;
-          console.error(`❌ Failed to analyze match ${match._id}:`, error.message);
+        if (!id) {
+          console.warn('⚠️ Match missing ID, skipping');
+          continue;
         }
+
+        console.log(`🤖 Analyzing: ${match.homeTeam?.name} vs ${match.awayTeam?.name}`);
+
+        // Perform AI analysis
+        const result = await analyzeMatch({
+          ...match,
+          matchId: id
+        });
+
+        if (result) {
+          stats.matchesAnalyzed++;
+          stats.lastAnalysis = new Date();
+        }
+
+        await new Promise(r => setTimeout(r, 3000));
+
+      } catch (e) {
+        console.error('❌ Failed analyzing match:', e.message);
+        stats.errors++;
       }
     }
 
-    console.log('\n' + '='.repeat(60));
-    console.log('📈 Auto-Analysis Statistics:');
-    console.log(`   Total Checks: ${stats.totalChecks}`);
-    console.log(`   Matches Analyzed: ${stats.matchesAnalyzed}`);
-    console.log(`   Errors: ${stats.errors}`);
-    console.log(`   Last Check: ${stats.lastCheck.toLocaleString('ar-EG')}`);
-    if (stats.lastAnalysis) {
-      console.log(`   Last Analysis: ${stats.lastAnalysis.toLocaleString('ar-EG')}`);
-    }
-    console.log('='.repeat(60) + '\n');
-
-  } catch (error) {
+  } catch (err) {
+    console.error('❌ Auto-analysis error:', err.message);
     stats.errors++;
-    console.error('❌ Auto-analyze error:', error.message);
-  } finally {
-    isRunning = false;
+  }
+
+  console.log('='.repeat(60));
+  console.log(`✔ Stats — Checks: ${stats.totalChecks}, Analyzed: ${stats.matchesAnalyzed}, Errors: ${stats.errors}`);
+  console.log('='.repeat(60));
+
+  isRunning = false;
+}
+
+function start() {
+  if (!ENABLED) {
+    console.log('⏸️ Auto-analysis disabled ENABLE_AUTO_ANALYSIS=false');
+    return;
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+    console.log('❌ Missing GROQ_API_KEY');
+    return;
+  }
+
+  console.log('🤖 Starting auto-analysis service…');
+  console.log(`⏰ Interval: ${CHECK_INTERVAL} min`);
+
+  setTimeout(checkAndAnalyzeMatches, 8000);
+
+  cronJob = cron.schedule(`*/${CHECK_INTERVAL} * * * *`, checkAndAnalyzeMatches);
+
+  console.log('✅ Auto-analysis started');
+}
+
+function stop() {
+  if (cronJob) {
+    cronJob.stop();
+    console.log('🛑 Auto-analysis stopped');
   }
 }
 
-/**
- * 📅 Fetch today's matches
- */
-async function fetchTodayMatches() {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/matches/today`, {
-      timeout: 10000
-    });
-    return response.data || [];
-  } catch (error) {
-    console.error('❌ Error fetching today matches:', error.message);
-    return [];
-  }
-}
-
-/**
- * 📅 Fetch yesterday's matches
- */
-async function fetchYesterdayMatches() {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/matches/yesterday`, {
-      timeout: 10000
-    });
-    return response.data || [];
-  } catch (error) {
-    console.error('❌ Error fetching yesterday matches:', error.message);
-    return [];
-  }
-}
-
-/**
- * ⏱️ Sleep utility
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * 📊 Get service statistics
- */
 function getStats() {
   return {
     ...stats,
-    isRunning,
     enabled: ENABLED,
-    checkInterval: CHECK_INTERVAL
+    interval: CHECK_INTERVAL,
+    isRunning
   };
 }
 
-/**
- * 🔄 Manual trigger for analysis
- */
 async function triggerManualAnalysis() {
   console.log('🔄 Manual analysis triggered');
   return checkAndAnalyzeMatches();
