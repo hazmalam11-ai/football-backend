@@ -25,7 +25,7 @@ async function analyzeMatch(matchData) {
 
     const exists = await Analysis.findByMatchId(matchId);
     if (exists) {
-      console.log(`⚠️ Already exists → skipping.`);
+      console.log(`⚠️ Analysis exists → skipping.`);
       return exists;
     }
 
@@ -36,7 +36,15 @@ async function analyzeMatch(matchData) {
       messages: [
         {
           role: 'system',
-          content: 'أنت محلل كرة قدم محترف تقدم تحليلاً عربياً مفصلاً.'
+          content: `
+أنت محلل كرة قدم عربي محترف.
+يجب أن يكون التحليل عربي بالكامل فقط.
+ممنوع استخدام كلمات أو أحرف إنجليزية.
+اكتب بأسلوب بشري احترافي متماسك وواضح وواقعي.
+استخدم لغة عربية رياضية احترافية.
+لا تذكر ID أو أي رموز.
+اكتب المحتوى بأسلوب محلل تلفزيوني محترف.
+        `
         },
         {
           role: 'user',
@@ -44,14 +52,13 @@ async function analyzeMatch(matchData) {
         }
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
+      temperature: 0.65,
       max_tokens: 3000,
       top_p: 0.9
     });
 
     const fullText = completion.choices[0].message.content;
-    const structured = parse(fullText);
-
+    
     const analysis = new Analysis({
       matchId,
       homeTeam: {
@@ -79,14 +86,7 @@ async function analyzeMatch(matchData) {
       status: matchData.status,
 
       analysis: {
-        summary: structured.summary,
-        performance: structured.performance,
-        keyPlayers: structured.keyPlayers,
-        tactics: structured.tactics,
-        statistics: structured.statistics,
-        strengths: structured.strengths,
-        weaknesses: structured.weaknesses,
-        fullText
+        fullText, // نعرض النص كاملاً بشكل متكامل بدل تقسيمه ضعيف
       },
 
       aiModel: "groq-llama-3.3-70b",
@@ -101,61 +101,54 @@ async function analyzeMatch(matchData) {
     return analysis;
 
   } catch (err) {
-    console.error(`❌ AI FAILED → using fallback. Reason: ${err.message}`);
+    console.error(`❌ AI FAILED → fallback. Reason: ${err.message}`);
 
     return fallback(matchData);
   }
 }
 
+
 /**
- * BUILD AI PROMPT
+ * NEW — Strong Prompt
  */
 function buildPrompt(m) {
   const score = `${m.score?.home || m.scoreA} - ${m.score?.away || m.scoreB}`;
 
   return `
-حلل هذه المباراة:
+حلل مباراة كرة القدم التالية بلغة عربية فصحى واضحة واحترافية كما لو كنت محللاً رياضياً يكتب لجمهور عربي:
 
-${m.homeTeam.name} ضد ${m.awayTeam.name}
+المباراة: ${m.homeTeam.name} ضد ${m.awayTeam.name}
 النتيجة: ${score}
 البطولة: ${m.tournament.name}
 الملعب: ${m.venue || 'غير محدد'}
 التاريخ: ${new Date(m.date).toLocaleDateString('ar-EG')}
 
-اكتب:
-- ملخص
-- أداء الفريقين
-- اللاعبون المؤثرون
-- التكتيكات
-- الإحصائيات
-- نقاط القوة والضعف
-بأسلوب احترافي عربي.
-  `;
-}
+اكتب التحليل مُقسماً كالتالي:
 
-/**
- * PARSE TEXT
- */
-function parse(text) {
-  return {
-    summary: extract(text, ['ملخص', 'summary']),
-    performance: {
-      overall: extract(text, ['الأداء', 'performance'])
-    },
-    keyPlayers: extract(text, ['لاعب', 'مؤثر']),
-    tactics: {
-      comparison: extract(text, ['تكتيك', 'خطة'])
-    },
-    statistics: extract(text, ['إحصائ', 'statistic']),
-    strengths: { homeTeam: [], awayTeam: [] },
-    weaknesses: { homeTeam: [], awayTeam: [] }
-  };
-}
+1️⃣ ملخص عام للمباراة
+2️⃣ تقييم أداء كل فريق:
+   - الدفاع
+   - الهجوم
+   - الوسط
+   - الروح والالتزام
+3️⃣ التكتيكات:
+   - طريقة اللعب
+   - نقاط التحول
+4️⃣ ثلاثة لاعبين مؤثرين في المباراة وأسباب التأثير
+5️⃣ نقاط قوة كل فريق
+6️⃣ نقاط ضعف كل فريق
+7️⃣ خلاصة فنية
 
-function extract(text, keys) {
-  const lines = text.split('\n');
-  const found = lines.filter(l => keys.some(k => l.includes(k)));
-  return found.join('\n').trim() || text.slice(0, 300);
+شروط صارمة:
+- اللغة العربية فقط
+- لا تستخدم الإنجليزية إطلاقاً
+- لا تذكر رموز أو IDs
+- استخدم كلمات بشرية طبيعية
+- تجنب التكرار
+- تحليل احترافي واقعي
+
+ابدأ الآن:
+`;
 }
 
 function fallback(m) {
@@ -163,13 +156,12 @@ function fallback(m) {
 
   const txt = `
 انتهت مباراة ${m.homeTeam.name} ضد ${m.awayTeam.name} بنتيجة ${score}.
-التحليل الكامل غير متوفر حالياً وسيتم توليده قريباً تلقائياً.
+التحليل التفصيلي غير متوفر حالياً وسيتم توليده قريباً.
   `;
 
   return {
     matchId: getMatchId(m),
     analysis: {
-      summary: txt,
       fullText: txt
     }
   };
