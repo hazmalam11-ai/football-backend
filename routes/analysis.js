@@ -6,41 +6,45 @@ const analyzeMatch = require('../services/aiAnalysis');
 // ===============================
 // 🏆 الدوريات و البطولات المسموح بها
 // ===============================
-const MAJOR_COMPETITIONS = [
+const MAJOR_LEAGUES = [
   // الدوريات الأوروبية الكبرى
-  "Premier League",
-  "La Liga",
-  "Serie A",
-  "Bundesliga",
-  "Ligue 1",
+  { name: "Premier League", country: "England" },
+  { name: "La Liga", country: "Spain" },
+  { name: "Serie A", country: "Italy" },
+  { name: "Bundesliga", country: "Germany" },
+  { name: "Ligue 1", country: "France" },
 
   // بطولات أوروبا
-  "UEFA Champions League",
-  "UEFA Europa League",
-  "UEFA Europa Conference League",
-  "UEFA Super Cup",
+  { name: "UEFA Champions League" },
+  { name: "UEFA Europa League" },
+  { name: "UEFA Europa Conference League" },
+  { name: "UEFA Super Cup" },
 
-  // العالمية
-  "FIFA Club World Cup",
-  "FIFA World Cup",
+  // البطولات العالمية
+  { name: "FIFA Club World Cup" },
+  { name: "FIFA World Cup" },
 
   // الدوريات العربية
-  "Egyptian Premier League",
-  "Saudi Pro League",
-  "Botola Pro",
-  "Qatar Stars League",
-  "UAE Pro League",
-  "Tunisian Ligue Professionnelle 1",
-  "Algerian Ligue Professionnelle 1",
+  { name: "Egyptian Premier League", country: "Egypt" },
+  { name: "Saudi Pro League", country: "Saudi Arabia" },
+  { name: "Botola Pro", country: "Morocco" },
+  { name: "Qatar Stars League", country: "Qatar" },
+  { name: "UAE Pro League", country: "UAE" },
+  { name: "Tunisian Ligue Professionnelle 1", country: "Tunisia" },
+  { name: "Algerian Ligue Professionnelle 1", country: "Algeria" },
 
   // بطولات قارية
-  "CAF Champions League",
-  "CAF Confederation Cup",
-  "AFC Champions League",
-  "AFC Asian Cup",
-  "CAF Africa Cup of Nations",
-  "Arab Club Champions Cup"
+  { name: "CAF Champions League" },
+  { name: "CAF Confederation Cup" },
+  { name: "AFC Champions League" },
+  { name: "AFC Asian Cup" },
+  { name: "CAF Africa Cup of Nations" },
+  { name: "Arab Club Champions Cup" }
 ];
+
+// ← استخرج أسماء البطولات فقط
+const MAJOR_COMPETITIONS = MAJOR_LEAGUES.map(l => l.name);
+
 
 // ===============================
 // TEST ROUTE
@@ -57,10 +61,12 @@ router.get('/test', async (req, res) => {
       latestAnalysis: latest || null,
       timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ===============================
 // SEARCH
@@ -68,6 +74,7 @@ router.get('/test', async (req, res) => {
 router.get('/search/query', async (req, res) => {
   try {
     const q = req.query.q;
+
     if (!q) return res.json({ success: true, data: [] });
 
     const results = await Analysis.find({
@@ -80,10 +87,12 @@ router.get('/search/query', async (req, res) => {
     }).limit(50);
 
     return res.json({ success: true, data: results });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ===============================
 // TRENDING
@@ -97,10 +106,12 @@ router.get('/trending/list', async (req, res) => {
       .limit(10);
 
     return res.json({ success: true, data: analyses });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ===============================
 // FILTER OPTIONS
@@ -131,10 +142,12 @@ router.get('/filter/options', async (req, res) => {
       .limit(50);
 
     return res.json({ success: true, data: analyses });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ===============================
 // DAILY STATS
@@ -156,10 +169,12 @@ router.get('/stats/daily', async (req, res) => {
     ]);
 
     return res.json({ success: true, data: stats });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 // ===============================
 // GENERATE
@@ -179,13 +194,15 @@ router.post('/generate', async (req, res) => {
       message: 'Analysis created',
       data: result
     });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
+
 // ===============================
-// PAGINATED LIST (MAJOR ONLY!)
+// PAGINATED LIST (MAJOR ONLY)
 // ===============================
 router.get('/', async (req, res) => {
   try {
@@ -217,8 +234,9 @@ router.get('/', async (req, res) => {
   }
 });
 
+
 // ===============================
-// GET SINGLE (NO FILTER)
+// GET SINGLE
 // ===============================
 router.get('/:matchId', async (req, res) => {
   try {
@@ -237,5 +255,6 @@ router.get('/:matchId', async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 module.exports = router;
