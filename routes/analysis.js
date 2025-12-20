@@ -18,8 +18,8 @@ router.get('/test', async (req, res) => {
       totalAnalyses: count,
       latestAnalysis: latest ? {
         matchId: latest.matchId,
-        homeTeam: latest.homeTeam,
-        awayTeam: latest.awayTeam,
+        homeTeam: latest.homeTeam.name,
+        awayTeam: latest.awayTeam.name,
         date: latest.date
       } : null,
       timestamp: new Date().toISOString()
@@ -36,9 +36,9 @@ router.get('/search/query', async (req, res) => {
 
     const results = await Analysis.find({
       $or: [
-        { homeTeam: { $regex: q, $options: 'i' } },
-        { awayTeam: { $regex: q, $options: 'i' } },
-        { tournament: { $regex: q, $options: 'i' } },
+        { "homeTeam.name": { $regex: q, $options: 'i' } },
+        { "awayTeam.name": { $regex: q, $options: 'i' } },
+        { "tournament.name": { $regex: q, $options: 'i' } },
         { 'analysis.summary': { $regex: q, $options: 'i' } }
       ]
     }).limit(50);
@@ -67,13 +67,13 @@ router.get('/filter/options', async (req, res) => {
 
     if (req.query.team) {
       query.$or = [
-        { homeTeam: req.query.team },
-        { awayTeam: req.query.team }
+        { "homeTeam.name": req.query.team },
+        { "awayTeam.name": req.query.team }
       ];
     }
 
     if (req.query.tournament) {
-      query.tournament = req.query.tournament;
+      query["tournament.name"] = req.query.tournament;
     }
 
     if (req.query.date) {
@@ -130,7 +130,7 @@ router.post('/generate', async (req, res) => {
 });
 
 // ==========================================
-// PAGINATED LIST + matchId SELECT FIX
+// PAGINATE LIST
 // ==========================================
 
 router.get('/', async (req, res) => {
@@ -142,8 +142,21 @@ router.get('/', async (req, res) => {
     const analyses = await Analysis.find()
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit)
-      .select('matchId homeTeam awayTeam tournament score analysis createdAt');
+      .limit(limit);
+
+    const formatted = analyses.map(a => ({
+      matchId: a.matchId,
+      homeTeam: a.homeTeam.name,
+      awayTeam: a.awayTeam.name,
+      homeTeamLogo: a.homeTeam.logo,
+      awayTeamLogo: a.awayTeam.logo,
+      scoreA: a.score.home,
+      scoreB: a.score.away,
+      tournament: a.tournament.name,
+      tournamentLogo: a.tournament.logo,
+      date: a.date,
+      createdAt: a.createdAt
+    }));
 
     const count = await Analysis.countDocuments();
 
@@ -152,7 +165,7 @@ router.get('/', async (req, res) => {
       total: count,
       page,
       pages: Math.ceil(count / limit),
-      data: analyses
+      data: formatted
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -160,7 +173,7 @@ router.get('/', async (req, res) => {
 });
 
 // ==========================================
-// GET ANALYSIS BY MATCH ID
+// GET BY MATCH ID  (FIXED FORMAT)
 // ==========================================
 
 router.get('/:matchId', async (req, res) => {
@@ -170,12 +183,31 @@ router.get('/:matchId', async (req, res) => {
     if (!analysis) {
       return res.status(404).json({
         success: false,
-        message: `No analysis found for match: ${req.params.matchId}`,
-        hint: 'Try GET /api/analysis'
+        message: `No analysis found for match: ${req.params.matchId}`
       });
     }
 
-    return res.json({ success: true, data: analysis });
+    const formatted = {
+      matchId: analysis.matchId,
+      homeTeam: analysis.homeTeam.name,
+      awayTeam: analysis.awayTeam.name,
+      homeTeamLogo: analysis.homeTeam.logo,
+      awayTeamLogo: analysis.awayTeam.logo,
+      scoreA: analysis.score.home,
+      scoreB: analysis.score.away,
+      tournament: analysis.tournament.name,
+      tournamentLogo: analysis.tournament.logo,
+      venue: analysis.venue,
+      date: analysis.date,
+      analysis: analysis.analysis,
+      views: analysis.views,
+      likes: analysis.likes,
+      createdAt: analysis.createdAt,
+      updatedAt: analysis.updatedAt
+    };
+
+    return res.json({ success: true, data: formatted });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
