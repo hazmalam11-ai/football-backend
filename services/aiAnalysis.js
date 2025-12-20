@@ -1,58 +1,59 @@
 const Groq = require('groq-sdk');
 const Analysis = require('../models/Analysis');
 
-// Initialize Groq client
+// INIT AI CLIENT
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
-/**
- * 🤖 Analyze a match using AI
- * @param {Object} matchData - Match data from API
- * @returns {Promise<Object>} Analysis object
- */
+// Helper: get universal matchId
+function getMatchId(data) {
+  return data.matchId || data.apiId || data._id || data.fixture?.id;
+}
+
 async function analyzeMatch(matchData) {
-  const startTime = Date.now();
-  
+  const start = Date.now();
+
   try {
-    console.log(`🎯 Starting AI analysis for: ${matchData.homeTeam.name} vs ${matchData.awayTeam.name}`);
-    
-    // Check if analysis already exists
-    const existingAnalysis = await Analysis.findByMatchId(matchData._id || matchData.apiId);
-    if (existingAnalysis) {
-      console.log(`✅ Analysis already exists for match ${matchData._id}`);
-      return existingAnalysis;
+    const matchId = getMatchId(matchData);
+
+    if (!matchId) {
+      throw new Error(`❌ Missing matchId`);
     }
-    
-    // Prepare match data for AI
-    const prompt = buildAnalysisPrompt(matchData);
-    
-    // Call Groq AI
+
+    console.log(`🎯 Analyzing: ${matchData.homeTeam.name} vs ${matchData.awayTeam.name} → ID: ${matchId}`);
+
+    const exists = await Analysis.findByMatchId(matchId);
+    if (exists) {
+      console.log(`⚠️ Already exists → skipping.`);
+      return exists;
+    }
+
+    const prompt = buildPrompt(matchData);
+
+    // CALL GROQ AI
     const completion = await groq.chat.completions.create({
-  messages: [
-    {
-      role: 'system',
-      content: 'أنت محلل كرة قدم محترف...'
-    },
-    {
-      role: 'user',
-      content: prompt
-    }
-  ],
-  model: 'llama-3.3-70b-versatile',  // 👈 التعديل هنا
-  temperature: 0.7,
-  max_tokens: 3000,
-  top_p: 0.9
-});
-    
-    const analysisText = completion.choices[0].message.content;
-    
-    // Parse AI response into structured data
-    const structuredAnalysis = parseAnalysisText(analysisText);
-    
-    // Create analysis document
+      messages: [
+        {
+          role: 'system',
+          content: 'أنت محلل كرة قدم محترف تقدم تحليلاً عربياً مفصلاً.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 3000,
+      top_p: 0.9
+    });
+
+    const fullText = completion.choices[0].message.content;
+    const structured = parse(fullText);
+
     const analysis = new Analysis({
-      matchId: matchData._id || matchData.apiId,
+      matchId,
       homeTeam: {
         id: matchData.homeTeam.id,
         name: matchData.homeTeam.name,
@@ -64,8 +65,8 @@ async function analyzeMatch(matchData) {
         logo: matchData.awayTeam.logo
       },
       score: {
-        home: matchData.scoreA || 0,
-        away: matchData.scoreB || 0
+        home: matchData.score?.home || matchData.scoreA || 0,
+        away: matchData.score?.away || matchData.scoreB || 0
       },
       tournament: {
         id: matchData.tournament.id,
@@ -76,202 +77,109 @@ async function analyzeMatch(matchData) {
       venue: matchData.venue,
       date: new Date(matchData.date),
       status: matchData.status,
+
       analysis: {
-        summary: structuredAnalysis.summary,
-        performance: structuredAnalysis.performance,
-        keyPlayers: structuredAnalysis.keyPlayers,
-        tactics: structuredAnalysis.tactics,
-        statistics: structuredAnalysis.statistics,
-        strengths: structuredAnalysis.strengths,
-        weaknesses: structuredAnalysis.weaknesses,
-        fullText: analysisText
+        summary: structured.summary,
+        performance: structured.performance,
+        keyPlayers: structured.keyPlayers,
+        tactics: structured.tactics,
+        statistics: structured.statistics,
+        strengths: structured.strengths,
+        weaknesses: structured.weaknesses,
+        fullText
       },
-      aiModel: 'groq-llama-3.3-70b',
-      analysisLanguage: 'ar',
-      processingTime: Date.now() - startTime,
+
+      aiModel: "groq-llama-3.3-70b",
+      processingTime: Date.now() - start,
       isPublished: true
     });
-    
-    // Save to database
+
     await analysis.save();
-    
-    const processingTime = Date.now() - startTime;
-    console.log(`✅ Analysis completed in ${processingTime}ms for match ${matchData._id}`);
-    
+
+    console.log(`✅ DONE in ${Date.now() - start}ms`);
+
     return analysis;
-    
-  } catch (error) {
-    console.error('❌ AI Analysis Error:', error.message);
-    
-    // Create fallback analysis if AI fails
-    const fallbackAnalysis = createFallbackAnalysis(matchData);
-    return fallbackAnalysis;
+
+  } catch (err) {
+    console.error(`❌ AI FAILED → using fallback. Reason: ${err.message}`);
+
+    return fallback(matchData);
   }
 }
 
 /**
- * 📝 Build analysis prompt for AI
+ * BUILD AI PROMPT
  */
-function buildAnalysisPrompt(matchData) {
-  const homeTeam = matchData.homeTeam.name;
-  const awayTeam = matchData.awayTeam.name;
-  const score = `${matchData.scoreA} - ${matchData.scoreB}`;
-  const tournament = matchData.tournament.name;
-  const date = new Date(matchData.date).toLocaleDateString('ar-EG');
-  
+function buildPrompt(m) {
+  const score = `${m.score?.home || m.scoreA} - ${m.score?.away || m.scoreB}`;
+
   return `
-حلل هذه المباراة بشكل احترافي ومفصل:
+حلل هذه المباراة:
 
-📊 **معلومات المباراة:**
-- الفريق الأول: ${homeTeam}
-- الفريق الثاني: ${awayTeam}
-- النتيجة النهائية: ${score}
-- البطولة: ${tournament}
-- التاريخ: ${date}
-- الملعب: ${matchData.venue || 'غير محدد'}
+${m.homeTeam.name} ضد ${m.awayTeam.name}
+النتيجة: ${score}
+البطولة: ${m.tournament.name}
+الملعب: ${m.venue || 'غير محدد'}
+التاريخ: ${new Date(m.date).toLocaleDateString('ar-EG')}
 
-📋 **المطلوب:**
-
-1. **ملخص المباراة** (3-4 جمل)
-   - أبرز أحداث المباراة
-   - مجريات اللقاء
-   - الفريق الأفضل
-
-2. **تحليل الأداء**
-   - أداء ${homeTeam}: (تقييم من 10 + تفاصيل)
-   - أداء ${awayTeam}: (تقييم من 10 + تفاصيل)
-   - مقارنة الأداء العام
-
-3. **اللاعبين المؤثرين**
-   - أفضل 2-3 لاعبين في المباراة
-   - تأثيرهم على النتيجة
-
-4. **التكتيكات**
-   - خطة ${homeTeam}
-   - خطة ${awayTeam}
-   - المقارنة التكتيكية
-
-5. **نقاط القوة والضعف**
-   - 3 نقاط قوة لكل فريق
-   - 3 نقاط ضعف لكل فريق
-
-6. **الإحصائيات والأرقام**
-   - تحليل النتيجة
-   - الاستحواذ المتوقع
-   - الفرص والهجمات
-
-اكتب التحليل بأسلوب احترافي وواضح باللغة العربية الفصحى.
-`;
+اكتب:
+- ملخص
+- أداء الفريقين
+- اللاعبون المؤثرون
+- التكتيكات
+- الإحصائيات
+- نقاط القوة والضعف
+بأسلوب احترافي عربي.
+  `;
 }
 
 /**
- * 🔍 Parse AI response into structured format
+ * PARSE TEXT
  */
-function parseAnalysisText(text) {
-  try {
-    // Extract sections using keywords
-    const sections = {
-      summary: extractSection(text, ['ملخص', 'summary']),
-      performance: {
-        overall: extractSection(text, ['أداء', 'performance', 'تحليل الأداء'])
-      },
-      keyPlayers: extractSection(text, ['لاعب', 'player', 'المؤثر']),
-      tactics: {
-        comparison: extractSection(text, ['تكتيك', 'tactic', 'خطة'])
-      },
-      statistics: extractSection(text, ['إحصائ', 'statistic', 'أرقام']),
-      strengths: {
-        homeTeam: [],
-        awayTeam: []
-      },
-      weaknesses: {
-        homeTeam: [],
-        awayTeam: []
-      }
-    };
-    
-    return sections;
-  } catch (error) {
-    console.error('Error parsing analysis:', error);
-    return {
-      summary: text.substring(0, 500),
-      performance: { overall: text },
-      keyPlayers: '',
-      tactics: { comparison: '' },
-      statistics: '',
-      strengths: { homeTeam: [], awayTeam: [] },
-      weaknesses: { homeTeam: [], awayTeam: [] }
-    };
-  }
+function parse(text) {
+  return {
+    summary: extract(text, ['ملخص', 'summary']),
+    performance: {
+      overall: extract(text, ['الأداء', 'performance'])
+    },
+    keyPlayers: extract(text, ['لاعب', 'مؤثر']),
+    tactics: {
+      comparison: extract(text, ['تكتيك', 'خطة'])
+    },
+    statistics: extract(text, ['إحصائ', 'statistic']),
+    strengths: { homeTeam: [], awayTeam: [] },
+    weaknesses: { homeTeam: [], awayTeam: [] }
+  };
 }
 
-/**
- * 📄 Extract section from text
- */
-function extractSection(text, keywords) {
+function extract(text, keys) {
   const lines = text.split('\n');
-  const relevantLines = lines.filter(line => 
-    keywords.some(keyword => line.includes(keyword))
-  );
-  
-  return relevantLines.join('\n').trim() || text.substring(0, 300);
+  const found = lines.filter(l => keys.some(k => l.includes(k)));
+  return found.join('\n').trim() || text.slice(0, 300);
 }
 
-/**
- * 🔄 Create fallback analysis if AI fails
- */
-function createFallbackAnalysis(matchData) {
-  const homeScore = matchData.scoreA || 0;
-  const awayScore = matchData.scoreB || 0;
-  const winner = homeScore > awayScore ? matchData.homeTeam.name : 
-                 awayScore > homeScore ? matchData.awayTeam.name : 'تعادل';
-  
-  const fallbackText = `
-انتهت مباراة ${matchData.homeTeam.name} و${matchData.awayTeam.name} بنتيجة ${homeScore}-${awayScore} في ${matchData.tournament.name}.
+function fallback(m) {
+  const score = `${m.score?.home || 0} - ${m.score?.away || 0}`;
 
-${winner !== 'تعادل' ? `حقق ${winner} الفوز` : 'انتهت المباراة بالتعادل'} في مباراة شهدت أداءً جيداً من الفريقين.
-
-كانت المباراة تنافسية بشكل كبير، مع فرص متبادلة للطرفين. أظهر كلا الفريقين رغبة قوية في تحقيق النتيجة الإيجابية.
-
-هذا التحليل تم إنشاؤه تلقائياً. سيتم تحديثه قريباً بتحليل مفصل.
-`;
+  const txt = `
+انتهت مباراة ${m.homeTeam.name} ضد ${m.awayTeam.name} بنتيجة ${score}.
+التحليل الكامل غير متوفر حالياً وسيتم توليده قريباً تلقائياً.
+  `;
 
   return {
-    matchId: matchData._id,
+    matchId: getMatchId(m),
     analysis: {
-      summary: fallbackText,
-      fullText: fallbackText
+      summary: txt,
+      fullText: txt
     }
   };
 }
 
-/**
- * 📊 Analyze multiple matches
- */
-async function analyzeMultipleMatches(matches) {
-  const results = [];
-  
-  for (const match of matches) {
-    try {
-      const analysis = await analyzeMatch(match);
-      results.push({ success: true, matchId: match._id, analysis });
-      
-      // Wait 2 seconds between requests to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-    } catch (error) {
-      results.push({ 
-        success: false, 
-        matchId: match._id, 
-        error: error.message 
-      });
-    }
-  }
-  
-  return results;
-}
-
 module.exports = {
   analyzeMatch,
-  analyzeMultipleMatches
+  analyzeMultipleMatches: async matches => {
+    const arr = [];
+    for (const m of matches) arr.push(await analyzeMatch(m));
+    return arr;
+  }
 };
