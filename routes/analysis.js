@@ -3,10 +3,9 @@ const router = express.Router();
 const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
-// ==========================================
-// STATIC ROUTES
-// ==========================================
-
+// ===============================
+// TEST ROUTE
+// ===============================
 router.get('/test', async (req, res) => {
   try {
     const count = await Analysis.countDocuments();
@@ -16,12 +15,7 @@ router.get('/test', async (req, res) => {
       success: true,
       message: 'Analysis API is working',
       totalAnalyses: count,
-      latestAnalysis: latest ? {
-        matchId: latest.matchId,
-        homeTeam: latest.homeTeam.name,
-        awayTeam: latest.awayTeam.name,
-        date: latest.date
-      } : null,
+      latestAnalysis: latest || null,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -29,6 +23,9 @@ router.get('/test', async (req, res) => {
   }
 });
 
+// ===============================
+// SEARCH
+// ===============================
 router.get('/search/query', async (req, res) => {
   try {
     const q = req.query.q;
@@ -39,7 +36,7 @@ router.get('/search/query', async (req, res) => {
         { "homeTeam.name": { $regex: q, $options: 'i' } },
         { "awayTeam.name": { $regex: q, $options: 'i' } },
         { "tournament.name": { $regex: q, $options: 'i' } },
-        { 'analysis.summary': { $regex: q, $options: 'i' } }
+        { "analysis.summary": { $regex: q, $options: 'i' } }
       ]
     }).limit(50);
 
@@ -49,10 +46,13 @@ router.get('/search/query', async (req, res) => {
   }
 });
 
+// ===============================
+// TRENDING
+// ===============================
 router.get('/trending/list', async (req, res) => {
   try {
     const analyses = await Analysis.find()
-      .sort({ createdAt: -1 })
+      .sort({ views: -1 })
       .limit(10);
 
     return res.json({ success: true, data: analyses });
@@ -61,6 +61,9 @@ router.get('/trending/list', async (req, res) => {
   }
 });
 
+// ===============================
+// FILTER OPTIONS
+// ===============================
 router.get('/filter/options', async (req, res) => {
   try {
     const query = {};
@@ -90,6 +93,10 @@ router.get('/filter/options', async (req, res) => {
   }
 });
 
+
+// ===============================
+// DAILY STATS
+// ===============================
 router.get('/stats/daily', async (req, res) => {
   try {
     const stats = await Analysis.aggregate([
@@ -109,6 +116,10 @@ router.get('/stats/daily', async (req, res) => {
   }
 });
 
+
+// ===============================
+// GENERATE
+// ===============================
 router.post('/generate', async (req, res) => {
   try {
     const matchData = req.body;
@@ -129,10 +140,10 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// ==========================================
-// PAGINATE LIST
-// ==========================================
 
+// ===============================
+// PAGINATED LIST (RAW FORMAT)
+// ===============================
 router.get('/', async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
@@ -144,20 +155,6 @@ router.get('/', async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    const formatted = analyses.map(a => ({
-      matchId: a.matchId,
-      homeTeam: a.homeTeam.name,
-      awayTeam: a.awayTeam.name,
-      homeTeamLogo: a.homeTeam.logo,
-      awayTeamLogo: a.awayTeam.logo,
-      scoreA: a.score.home,
-      scoreB: a.score.away,
-      tournament: a.tournament.name,
-      tournamentLogo: a.tournament.logo,
-      date: a.date,
-      createdAt: a.createdAt
-    }));
-
     const count = await Analysis.countDocuments();
 
     return res.json({
@@ -165,17 +162,18 @@ router.get('/', async (req, res) => {
       total: count,
       page,
       pages: Math.ceil(count / limit),
-      data: formatted
+      data: analyses // ← raw (مهم جداً)
     });
+
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ==========================================
-// GET BY MATCH ID  (FIXED FORMAT)
-// ==========================================
 
+// ===============================
+// GET SINGLE BY MATCH ID (RAW FORMAT)
+// ===============================
 router.get('/:matchId', async (req, res) => {
   try {
     const analysis = await Analysis.findOne({ matchId: req.params.matchId });
@@ -187,30 +185,12 @@ router.get('/:matchId', async (req, res) => {
       });
     }
 
-    const formatted = {
-      matchId: analysis.matchId,
-      homeTeam: analysis.homeTeam.name,
-      awayTeam: analysis.awayTeam.name,
-      homeTeamLogo: analysis.homeTeam.logo,
-      awayTeamLogo: analysis.awayTeam.logo,
-      scoreA: analysis.score.home,
-      scoreB: analysis.score.away,
-      tournament: analysis.tournament.name,
-      tournamentLogo: analysis.tournament.logo,
-      venue: analysis.venue,
-      date: analysis.date,
-      analysis: analysis.analysis,
-      views: analysis.views,
-      likes: analysis.likes,
-      createdAt: analysis.createdAt,
-      updatedAt: analysis.updatedAt
-    };
-
-    return res.json({ success: true, data: formatted });
+    return res.json({ success: true, data: analysis });
 
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 module.exports = router;
