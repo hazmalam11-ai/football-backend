@@ -4,6 +4,45 @@ const Analysis = require('../models/Analysis');
 const analyzeMatch = require('../services/aiAnalysis');
 
 // ===============================
+// 🏆 الدوريات و البطولات المسموح بها
+// ===============================
+const MAJOR_COMPETITIONS = [
+  // الدوريات الأوروبية الكبرى
+  "Premier League",
+  "La Liga",
+  "Serie A",
+  "Bundesliga",
+  "Ligue 1",
+
+  // بطولات أوروبا
+  "UEFA Champions League",
+  "UEFA Europa League",
+  "UEFA Europa Conference League",
+  "UEFA Super Cup",
+
+  // العالمية
+  "FIFA Club World Cup",
+  "FIFA World Cup",
+
+  // الدوريات العربية
+  "Egyptian Premier League",
+  "Saudi Pro League",
+  "Botola Pro",
+  "Qatar Stars League",
+  "UAE Pro League",
+  "Tunisian Ligue Professionnelle 1",
+  "Algerian Ligue Professionnelle 1",
+
+  // بطولات قارية
+  "CAF Champions League",
+  "CAF Confederation Cup",
+  "AFC Champions League",
+  "AFC Asian Cup",
+  "CAF Africa Cup of Nations",
+  "Arab Club Champions Cup"
+];
+
+// ===============================
 // TEST ROUTE
 // ===============================
 router.get('/test', async (req, res) => {
@@ -51,7 +90,9 @@ router.get('/search/query', async (req, res) => {
 // ===============================
 router.get('/trending/list', async (req, res) => {
   try {
-    const analyses = await Analysis.find()
+    const analyses = await Analysis.find({
+      "tournament.name": { $in: MAJOR_COMPETITIONS }
+    })
       .sort({ views: -1 })
       .limit(10);
 
@@ -66,7 +107,9 @@ router.get('/trending/list', async (req, res) => {
 // ===============================
 router.get('/filter/options', async (req, res) => {
   try {
-    const query = {};
+    const query = {
+      "tournament.name": { $in: MAJOR_COMPETITIONS }
+    };
 
     if (req.query.team) {
       query.$or = [
@@ -93,13 +136,15 @@ router.get('/filter/options', async (req, res) => {
   }
 });
 
-
 // ===============================
 // DAILY STATS
 // ===============================
 router.get('/stats/daily', async (req, res) => {
   try {
     const stats = await Analysis.aggregate([
+      {
+        $match: { "tournament.name": { $in: MAJOR_COMPETITIONS } }
+      },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -115,7 +160,6 @@ router.get('/stats/daily', async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 // ===============================
 // GENERATE
@@ -140,9 +184,8 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-
 // ===============================
-// PAGINATED LIST (RAW FORMAT)
+// PAGINATED LIST (MAJOR ONLY!)
 // ===============================
 router.get('/', async (req, res) => {
   try {
@@ -150,19 +193,23 @@ router.get('/', async (req, res) => {
     const limit = Number(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    const analyses = await Analysis.find()
+    const analyses = await Analysis.find({
+      "tournament.name": { $in: MAJOR_COMPETITIONS }
+    })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    const count = await Analysis.countDocuments();
+    const count = await Analysis.countDocuments({
+      "tournament.name": { $in: MAJOR_COMPETITIONS }
+    });
 
     return res.json({
       success: true,
       total: count,
       page,
       pages: Math.ceil(count / limit),
-      data: analyses // ← raw (مهم جداً)
+      data: analyses
     });
 
   } catch (error) {
@@ -170,9 +217,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-
 // ===============================
-// GET SINGLE BY MATCH ID (RAW FORMAT)
+// GET SINGLE (NO FILTER)
 // ===============================
 router.get('/:matchId', async (req, res) => {
   try {
@@ -191,6 +237,5 @@ router.get('/:matchId', async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 module.exports = router;
