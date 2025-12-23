@@ -7,7 +7,6 @@ const analyzeMatch = require('../services/aiAnalysis');
 // 🌍 قاعدة بيانات شاملة للدوريات والبطولات العالمية
 // ===============================
 const WORLD_LEAGUES = {
-  // 🏴󠁧󠁢󠁥󠁮󠁧󠁿 إنجلترا
   england: [
     { name: "Premier League", nameAr: "الدوري الإنجليزي الممتاز", country: "England", countryAr: "إنجلترا", tier: 1, type: "league" },
     { name: "Championship", nameAr: "الدرجة الأولى الإنجليزية", country: "England", countryAr: "إنجلترا", tier: 2, type: "league" },
